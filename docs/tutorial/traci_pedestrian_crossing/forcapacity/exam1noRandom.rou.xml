@@ -1,0 +1,9 @@
+<routes>
+    <route id="BAC" edges="BdowntoB BtoA AtoC CtoCright"/>
+    <route id="ABC" edges="AuptoA AtoB BtoC CtoCright"/>
+    <route id="ABC2" edges="AuptoA AtoC CtoCright"/>
+    <flow id="up" route="BAC" begin="0" end="50" color="1,1,1" probability="0.5"/>
+    <flow id="up2" route="BAC" begin="0" end="7200" color="1,0,0" probability="0.15"/>
+    <flow id="down" route="ABC" begin="0" end="7200" color="0,1,0" probability="0.5"/>
+    <flow id="three" route="ABC2" begin="0" end="7200" color="0,0,1" probability="0.5"/>
+</routes>

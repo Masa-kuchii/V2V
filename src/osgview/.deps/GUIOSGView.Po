@@ -1,0 +1,3 @@
+GUIOSGView.o: GUIOSGView.cpp ../../src/config.h
+
+../../src/config.h:

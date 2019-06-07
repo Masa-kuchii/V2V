@@ -1,0 +1,16 @@
+Loading net-file from 'joined_buslanes.net.xml'... done (80ms).
+Loading additional-files from 'joined_bus_stops.add.xml'... done (1ms).
+Loading additional-files from 'joined_detectors.add.xml'... done (3ms).
+Loading additional-files from 'joined_vtypes.add.xml'... done (2ms).
+Loading additional-files from 'joined_tls.add.xml'... done (2ms).
+Loading done.
+Simulation started with time: 0.00
+Performance: 
+ Duration: 252447ms
+ Real time factor: 17.6077
+ UPS: 13700.776797
+Vehicles: 
+ Inserted: 11176
+ Running: 51
+ Waiting: 0
+

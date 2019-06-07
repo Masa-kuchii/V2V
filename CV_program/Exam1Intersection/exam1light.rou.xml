@@ -1,0 +1,6 @@
+<routes>
+    <route id="BAC" edges="BdowntoB BtoA AtoC CtoCright"/>
+    <route id="ABC" edges="AuptoA AtoB BtoC CtoCright"/>
+    <flow id="up" route="BAC" begin="0" end="3600" color="1,0,0" vehsPerHour="3600"/>
+    <flow id="down" route="ABC" begin="0" end="3600" color="0,1,0" vehsPerHour="3600"/>
+</routes>

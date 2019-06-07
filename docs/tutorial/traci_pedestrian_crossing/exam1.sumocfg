@@ -1,0 +1,11 @@
+<configuration>
+    <input>
+        <net-file value="exam1.net.xml"/>
+        <route-files value="exam1.rou.xml"/>
+        <gui-settings-file value="exam1.settings.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <end value="900"/>
+    </time>
+</configuration>

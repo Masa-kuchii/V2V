@@ -1,0 +1,9 @@
+<edges>
+    <edge id="AtoB" from="A" to="B" priority="1" numLanes="1" speed="13.89"/>
+    <edge id="BtoA" from="B" to="A" priority="1" numLanes="1" speed="13.89"/>
+    <edge id="BtoC" from="B" to="C" priority="1" numLanes="1" speed="13.89"/>
+    <edge id="AtoC" from="A" to="C" priority="1" numLanes="1" speed="1.89"/>
+    <edge id="AuptoA" from="Aup" to="A" priority="1" numLanes="1" speed="13.89"/>
+    <edge id="BdowntoB" from="Bdown" to="B" priority="1" numLanes="2" speed="13.89"/>
+    <edge id="CtoCright" from="C" to="Cright" priority="1" numLanes="1" speed="13.89"/>
+</edges>

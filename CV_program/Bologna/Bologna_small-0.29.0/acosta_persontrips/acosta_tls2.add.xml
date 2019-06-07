@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<add>
+    <tlLogic id="220" type="static" programID="utopia-mod" offset="0">
+        <phase duration="40" state="rrrggGGrGGGGGrGrGrGrG"/>
+        <phase duration="5"  state="rrrggGGrGGGGrrGrrrrrr"/>
+        <phase duration="3"  state="rrrggGGrGGyyrrrrrrrrr"/>
+        <phase duration="3"  state="rrryyyyrGGrrrrrrrrrrr"/>
+        <phase duration="2"  state="rrrrrrrrGGrrrrrrrrrrr"/>
+        <phase duration="5"  state="gggrrrrrGGrrrGGGGrGrG"/>
+        <phase duration="5"  state="gggrrrrrGGrrrrrrrrrrr"/>
+        <phase duration="3"  state="GGGrrrrryyrrrrrrrrrrr"/>
+        <phase duration="2"  state="GGGrrrrrrrrrrrrrrrrrr"/>
+        <phase duration="12" state="gggrrrrgrrrrrGGGGGrGG"/>
+        <phase duration="5"  state="gggrrrrgrrrrrrrrrrrrr"/>
+        <phase duration="3"  state="yyyrrrryrrrrrrrrrrrrr"/>
+        <phase duration="2"  state="rrrrrrrrrrrrrrrrrrrrr"/>
+    </tlLogic>
+
+</add>
+

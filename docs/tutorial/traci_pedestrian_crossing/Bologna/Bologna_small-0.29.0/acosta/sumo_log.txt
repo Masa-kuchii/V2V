@@ -1,0 +1,19 @@
+Loading net-file from 'acosta_buslanes.net.xml'... done (32ms).
+Loading additional-files from 'acosta_vtypes.add.xml'... done (4ms).
+Loading additional-files from 'acosta_detectors.add.xml'... done (2ms).
+Loading additional-files from 'acosta_bus_stops.add.xml'... done (2ms).
+Loading additional-files from 'acosta_tls.add.xml'... done (1ms).
+Loading done.
+Simulation started with time: 0.00
+Warning: Teleporting vehicle 'Turati_1_77'; waited too long (yield), lane='19_0', time=3163.00.
+Warning: Vehicle 'Turati_1_77' ends teleporting on edge '22', time 3173.00.
+Performance: 
+ Duration: 136949ms
+ Real time factor: 32.2748
+ UPS: 17011.245062
+Vehicles: 
+ Inserted: 8724 (Loaded: 8779)
+ Running: 107
+ Waiting: 55
+Teleports: 1 (Yield: 1)
+

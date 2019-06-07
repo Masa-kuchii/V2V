@@ -1,0 +1,9 @@
+Small-scale scenarios based on the city of Bologna. The large roundabout can be found at 44.494554,11.314393.
+These scenarios were developed as part of the iTETRIS project [http://www.ict-itetris.eu/]
+A publication on these scenarios can be found at [http://sumo.dlr.de/wiki/Publications#SUMO_2014] and [http://elib.dlr.de/89354]
+
+L. Bieker, D. Krajzewicz1, A. Morra, C. Michelacci and F. Cartolano, "Traffic simulation for all: a real world traffic scenario from the city of Bologna" 
+SUMO2014, p 19-26
+
+Note, that the pedestrian demand in the acosta_persontrips scenario is an assumed
+value and is only intended to showcase multi-modal and inter-modal simulation

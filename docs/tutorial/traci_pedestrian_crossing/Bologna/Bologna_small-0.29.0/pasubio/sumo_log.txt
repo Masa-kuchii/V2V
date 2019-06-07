@@ -1,0 +1,32 @@
+Loading net-file from 'pasubio_buslanes.net.xml'... done (39ms).
+Loading additional-files from 'pasubio_vtypes.add.xml'... done (1ms).
+Loading additional-files from 'pasubio_bus_stops.add.xml'... done (1ms).
+Loading additional-files from 'pasubio_busses.rou.xml'... done (12ms).
+Loading additional-files from 'pasubio_detectors.add.xml'... done (3ms).
+Loading additional-files from 'pasubio_tls.add.xml'... done (2ms).
+Loading done.
+Simulation started with time: 0.00
+Warning: Teleporting vehicle 'Pertini_22_485'; waited too long (yield), lane=':18_11_0', time=1411.00.
+Warning: Vehicle 'Pertini_22_485' ends teleporting on edge '17[0]', time 1411.00.
+Warning: Teleporting vehicle 'Saffi_94_299'; waited too long (yield), lane=':18_5_0', time=1412.00.
+Warning: Vehicle 'Saffi_94_299' ends teleporting on edge '18', time 1412.00.
+Warning: Teleporting vehicle 'Gandhi_50_623'; waited too long (yield), lane='23_0', time=1436.00.
+Warning: Vehicle 'Gandhi_50_623' ends teleporting on edge '17[0]', time 1436.00.
+Warning: Teleporting vehicle 'Saffi_94_357'; waited too long (yield), lane=':18_5_0', time=1796.00.
+Warning: Vehicle 'Saffi_94_357' ends teleporting on edge '18', time 1796.00.
+Warning: Teleporting vehicle 'Pertini_32_567'; waited too long (yield), lane=':18_11_0', time=1797.00.
+Warning: Vehicle 'Pertini_32_567' ends teleporting on edge '17[0]', time 1797.00.
+Warning: Teleporting vehicle 'Montefiorino_22_307'; waited too long (yield), lane='23_0', time=1814.00.
+Warning: Vehicle 'Montefiorino_22_307' ends teleporting on edge '17[0]', time 1814.00.
+Warning: Teleporting vehicle 'Montefiorino_22_308'; waited too long (jam), lane='23_0', time=1827.00.
+Warning: Vehicle 'Montefiorino_22_308' ends teleporting on edge '17[0]', time 1827.00.
+Performance: 
+ Duration: 223705ms
+ Real time factor: 11.6537
+ UPS: 6609.083391
+Vehicles: 
+ Inserted: 6341 (Loaded: 6393)
+ Running: 665
+ Waiting: 0
+Teleports: 7 (Jam: 1, Yield: 6)
+
