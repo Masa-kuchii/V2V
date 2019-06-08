@@ -148,7 +148,33 @@ def ExitUpdate(linklist, car_list, linkid, time, outputcarid, comrange):
         print("No car")
     return 0
 #
-def GetQueueLength(carid, CommunicationRange,):
+def GetQueueLength(carid, linklist, car_list, linkid, time, comrange):
+    car = car_list[carid]
+    outcarPos = traci.vehicle.getPosition(outputcarid)
+    vehIDs = traci.edge.getLastStepVehicleIDs(linkid)
+    vehIDs_reverse = traci.edge.getLastStepVehicleIDs(linkid)
+    vehIDs_reverse.reverse()
+    n = 0
+    platoon = []
+    for i in range(len(vehIDs)):
+        mae = vehIDs_reverse[i]
+        mae_posi = traci.vehicle.getPosition(mae)
+        if (traci.simulation.getDistance2D(outcarPos[0], outcarPos[1], mae_posi[0], mae_posi[1], 0, 0) > comrange or mae == vehIDs_reverse[-1]):
+            break
+        ushiro = vehIDs_reverse[i+1]
+        ushiro_posi = traci.vehicle.getPosition(ushiro)
+        if (traci.simulation.getDistance2D(outcarPos[0], outcarPos[1], ushiro_posi[0], ushiro_posi[1], 0, 0) > comrange):
+            break
+        two_veh_dis = traci.simulation.getDistance2D(mae_posi[0], mae_posi[1], ushiro_posi[0], ushiro_posi[1], 0, 0)
+        if (two_veh_dis <= 15):
+            if (mae not in platoon):
+                platoon.append(mae)
+            if (ushiro not in platoon):
+                platoon.append(ushiro)
+    if (platoon != []):
+        for j in platoon:
+            if (traci.vehicle.getSpeed(j) < 5.0):
+                n += 1
     return 0
 
 def GetEta():
