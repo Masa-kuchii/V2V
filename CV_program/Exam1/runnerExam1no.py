@@ -75,11 +75,13 @@ def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time):
             ut = []
             link_vehs = traci.edge.getLastStepVehicleIDs(j)
             for k in temp_group:
-                # if ( k.id == link_vehs[-1] and traci.vehicle.getSpeed(k.id) <= 5.0):
-                #     k.n[j].append((time, GetQueueLength(k.id, car_list, j, comrange)))
-                #     k.St[j].append((time, -Outflow))
-                #     k.Ut[j].append((time,(Inflowmax - Outflow)))
                 if j in k.n.keys():
+                    if (link_vehs != []):
+                        if ( k.id == link_vehs[-1] and traci.vehicle.getSpeed(k.id) <= 1.0 and time >= 500):
+                            n.append((time, GetQueueLength(k.id, car_list, j, comrange)))
+                            st.append((time, -GetEta()*(linklist[j].outflow)))
+                            ut.append((time, GetEta()*(linklist[j].inflow - linklist[j].outflow)))
+                            linklist[j].queue = GetQueueLength(k.id, car_list, j, comrange)
                     n = n + k.n[j]
                     st = st + k.St[j]
                     ut = ut + k.Ut[j]
@@ -121,6 +123,7 @@ def ExitUpdate(linklist, car_list, linkid, time, outputcarid, comrange):
                 tempCar.Ut[linkid] = []
             tempCar.n[linkid].append((time, n))
             tempCar.St[linkid].append((time, -Outflow))
+            print(Outflow)
             tempCar.Ut[linkid].append((time,(Inflowmax - Outflow)))
             linklist[linkid].queue = n
             tempCar.lasttime = time
@@ -164,6 +167,9 @@ def GetQueueLength(carid, car_list, linkid, comrange):
 def GetEta():
     eta = 1.0
     return eta
+
+def UpdataEta():
+    return 0
 
 def GetEdgeCapacity(linkid):
     inflowmaxcurrent = 0.55
@@ -341,7 +347,7 @@ if __name__ == "__main__":
 
     net = 'exam1no.net.xml'
     communication_range = 25
-    f = open('infoResult20190608_range25_test.csv',"w")
+    f = open('infoResult20190616_range25_test.csv',"w")
     csvWriter = csv.writer(f)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
