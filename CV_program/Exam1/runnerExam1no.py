@@ -60,10 +60,8 @@ class Eta:
     def __init__(self):
         self.value = 1.0
         self.hist = [(0,1.0)]
-
     def GetEta(self):
         return self.value
-
     def CountInconsis(self, carids, carlist, QueueLinkIDs,time):
         num_con = 0
         num_incon = 0
@@ -100,7 +98,6 @@ class Eta:
                     else:
                         num_con += 1
         return num_incon
-
     def FixedUpdate(self, carids, carlist, QueueLinkIDs,time, time_interval):
         num_incon = self.CountInconsis(self, carids, carlist, QueueLinkIDs,time)
         current_eta = self.GetEta(self)
@@ -112,10 +109,9 @@ class Eta:
         self.hist.append((time, next_eta))
         return 0
 
-
 """V2V update: V2V communication among drivers in the same link."""
 # getDistance2D(self, x1, y1, x2, y2, isGeo=False, isDriving=False)
-def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time):
+def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time, eta):
     tempcar = car_list[carid]
     tempcarPos = traci.vehicle.getPosition(carid)
     temp_group = []
@@ -136,8 +132,8 @@ def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time):
                     if (link_vehs != []):
                         if ( k.id == link_vehs[-1] and traci.vehicle.getSpeed(k.id) <= 1.0 and time >= 500):
                             n.append((time, GetQueueLength(k.id, car_list, j, comrange)))
-                            st.append((time, -GetEta()*(linklist[j].outflow)))
-                            ut.append((time, GetEta()*(linklist[j].inflow - linklist[j].outflow)))
+                            st.append((time, -eta.GetEta()*(linklist[j].outflow)))
+                            ut.append((time, eta.GetEta()*(linklist[j].inflow - linklist[j].outflow)))
                             linklist[j].queue = GetQueueLength(k.id, car_list, j, comrange)
                     n = n + k.n[j]
                     st = st + k.St[j]
@@ -160,7 +156,7 @@ def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time):
 # flow = 1/timeheadway
 # qin = maximam incoming flow = minimum gap it is fixed value
 # 1.5m/s
-def ExitUpdate(linklist, car_list, linkid, time, outputcarid, comrange):
+def ExitUpdate(linklist, car_list, linkid, time, outputcarid, comrange, eta):
     if ((outputcarid != 0) and (traci.edge.getLastStepVehicleNumber(linkid) > 3) and outputcarid in traci.vehicle.getIDList()):
         n = GetQueueLength(outputcarid, car_list, linkid, comrange)
         if (n > 0):
@@ -179,9 +175,9 @@ def ExitUpdate(linklist, car_list, linkid, time, outputcarid, comrange):
                 tempCar.St[linkid] = []
                 tempCar.Ut[linkid] = []
             tempCar.n[linkid].append((time, n))
-            tempCar.St[linkid].append((time, -Outflow))
+            tempCar.St[linkid].append((time, -eta.GetEta()*Outflow))
             print(Outflow)
-            tempCar.Ut[linkid].append((time,(Inflowmax - Outflow)))
+            tempCar.Ut[linkid].append((time,eta.GetEta()*(Inflowmax - Outflow)))
             linklist[linkid].queue = n
             tempCar.lasttime = time
     else:
@@ -221,9 +217,6 @@ def GetQueueLength(carid, car_list, linkid, comrange):
                 queue += 1
     return queue
 
-def GetEta():
-    eta = 1.0
-    return eta
 
 def GetEdgeCapacity(linkid):
     inflowmaxcurrent = 0.55
@@ -346,6 +339,8 @@ def run():
     # Car_list
     print(Link_list)
     Car_list = {}
+    # eta
+    eta = Eta()
     # main loop. do something every simulation step until no more vehicles are
     # loaded or running
     while traci.simulation.getMinExpectedNumber() > 0:
@@ -368,12 +363,10 @@ def run():
                     temp_link.outnum.append(temp_out)
                     outputCar = temp_link.lastvehs[-1]
                     temp_link.lasttime = traci.simulation.getCurrentTime()/1000
-                    ExitUpdate(Link_list, Car_list,j,time,outputCar,communication_range)
+                    ExitUpdate(Link_list, Car_list,j,time,outputCar,communication_range,eta)
                     temp_link.lastvehs = CurrentVehs
         for h in traci.vehicle.getIDList():
-            V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time)
-        # print(timeman)
-        # print(traci.edge.getLastStepHaltingNumber("BtoA"))
+            V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
         Csvoutput(csvWriter,time, Link_list, Car_list)
     sys.stdout.flush()
     traci.close()
