@@ -39,6 +39,7 @@ class Car_Info:
         self.n = {}
         self.St = {}
         self.Ut = {}
+
 class Link_Info:
     def __init__(self,id):
         self.id = id
@@ -52,8 +53,64 @@ class Link_Info:
         self.incount = 0
         self.lastvehs = [0]
         self.queue = 0
-    def GetLinkcapacity():
+    def GetLinkcapacity(self):
         return self.inflow
+
+class Eta:
+    def __init__(self):
+        self.value = 1.0
+        self.hist = [(0,1.0)]
+
+    def GetEta(self):
+        return self.value
+
+    def CountInconsis(self, carids, carlist, QueueLinkIDs,time):
+        num_con = 0
+        num_incon = 0
+        for linkid in QueueLinkIDs:
+            InconPattern = []
+            for j in carids:
+                car = carlist[j]
+                St = 0.0
+                Ut = 100000
+                if (linkid in car.n.keys()):
+                    for n in car.n[linkid]:
+                        Car_n_Time = n[0]
+                        Car_n_Value = n[1]
+                        CarDic[Car_n_Time] = Car_n_Value
+                    for st in car.St[linkid]:
+                        Car_st_Time = st[0]
+                        Car_st_Value = st[1]
+                        newst = CarDic[Car_st_Time] + Car_st_Value*(time - Car_st_Time)
+                        if (newst > St):
+                            St = CarDic[Car_st_Time] + Car_st_Value*(time - Car_st_Time)
+                    for ut in car.Ut[linkid]:
+                        Car_ut_Time = ut[0]
+                        Car_ut_Value = ut[1]
+                        newut = CarDic[Car_ut_Time] + Car_ut_Value*(time - Car_ut_Time)
+                        if (newut < Ut):
+                            Ut = CarDic[Car_ut_Time] + Car_ut_Value*(time - Car_ut_Time)
+                    if (St > Ut):
+                        Stpattern = (Car_st_Time, Car_st_Value)
+                        Utpattern = (Car_ut_Time, Car_ut_Value)
+                        if ((Stpattern not in InconPattern) and (Utpattern not in InconPattern)):
+                            num_incon += 1
+                            InconPattern.append(Stpattern)
+                            InconPattern.append(Utpattern)
+                    else:
+                        num_con += 1
+        return num_incon
+
+    def FixedUpdate(self, carids, carlist, QueueLinkIDs,time, time_interval):
+        num_incon = self.CountInconsis(self, carids, carlist, QueueLinkIDs,time)
+        current_eta = self.GetEta(self)
+        if (num_incon == 0):
+            next_eta = current_eta * 0.95 #5% down
+        else:
+            next_eta = current_eta * pow(1.2, num_incon) #20% up
+        self.value = next_eta
+        self.hist.append((time, next_eta))
+        return 0
 
 
 """V2V update: V2V communication among drivers in the same link."""
@@ -167,9 +224,6 @@ def GetQueueLength(carid, car_list, linkid, comrange):
 def GetEta():
     eta = 1.0
     return eta
-
-def UpdataEta():
-    return 0
 
 def GetEdgeCapacity(linkid):
     inflowmaxcurrent = 0.55
@@ -347,7 +401,7 @@ if __name__ == "__main__":
 
     net = 'exam1no.net.xml'
     communication_range = 25
-    f = open('infoResult20190616_range25_test.csv',"w")
+    f = open('infoResult20190617_range25_test.csv',"w")
     csvWriter = csv.writer(f)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
