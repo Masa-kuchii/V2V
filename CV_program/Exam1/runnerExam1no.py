@@ -98,7 +98,7 @@ class Eta:
                     else:
                         num_con += 1
         return num_incon
-    def FixedUpdate(self, carids, carlist, QueueLinkIDs,time, time_interval):
+    def FixedUpdate(self, carids, carlist, QueueLinkIDs, time, time_interval):
         num_incon = self.CountInconsis(self, carids, carlist, QueueLinkIDs,time)
         current_eta = self.GetEta(self)
         if (num_incon == 0):
@@ -108,6 +108,7 @@ class Eta:
         self.value = next_eta
         self.hist.append((time, next_eta))
         return 0
+
 
 """V2V update: V2V communication among drivers in the same link."""
 # getDistance2D(self, x1, y1, x2, y2, isGeo=False, isDriving=False)
@@ -149,6 +150,7 @@ def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time, eta
                 h.St[j] = stlist
                 h.Ut[j] = utlist
 
+
 """Information update when CVs exit the link"""
 # edgeID:
 # edge position: traci.vehicle.getLanePosition(leadvehid)
@@ -183,7 +185,8 @@ def ExitUpdate(linklist, car_list, linkid, time, outputcarid, comrange, eta):
     else:
         print("No car")
     return 0
-#
+
+
 def GetQueueLength(carid, car_list, linkid, comrange):
     car = car_list[carid]
     carPos = traci.vehicle.getPosition(carid)
@@ -234,7 +237,7 @@ def CsvVehicleOutput():
     return 0
 
 # Time n outflow inflow ,edgeforwardcarst edgeforwardcarut edgebackwardcarst edgebackwardcarut edgeTraveltime edgeaverageflow,
-def Csvoutput(writer,time, linklist, car_list):
+def Csvoutput(writer,time, linklist, car_list,comrange):
     onlyidlist = ["AtoB","BtoA","AtoC","BtoC","CtoCright"]
     if (time == 1):
         name = ["time","queue length n","outflow","inflow","AtoB Lead st","AtoB Lead ut","AtoB last st","AtoB last ut","AtoBTT","AtoBEF","AtoBSpeed","BtoA Lead st","BtoA Lead ut","BtoA last st","BtoA last ut","BtoATT","BtoAEF","BtoASpeed","AtoC Lead st","AtoC Lead ut","AtoC last st","AtoC last ut","AtoCTT","AtoCEF","AtoCSpeed","BtoC Lead st","BtoC Lead ut","BtoC last st","BtoC last ut","BtoCTT","BtoCEF","BtoCSpeed","CtoCright Lead st","CtoCright Lead ut","CtoCright last st","CtoCright last ut","CtoCrightTT","CtoCrightEF","CtoCrightSpeed"]
@@ -243,7 +246,10 @@ def Csvoutput(writer,time, linklist, car_list):
         val = []
         val.append(time)
         vehicles = traci.edge.getLastStepVehicleIDs("BtoA")
-        n = linklist["BtoA"].queue
+        n = 0
+        if (vehicles != []):
+            n = GetQueueLength(vehicles[-1], car_list, "BtoA", comrange)
+        # n = linklist["BtoA"].queue
         # if (traci.edge.getLastStepHaltingNumber("BtoA") >= 0):
         #     for i in vehicles:
         #         if (traci.vehicle.getSpeed(i) < 5.0):
@@ -367,7 +373,7 @@ def run():
                     temp_link.lastvehs = CurrentVehs
         for h in traci.vehicle.getIDList():
             V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
-        Csvoutput(csvWriter,time, Link_list, Car_list)
+        Csvoutput(csvWriter,time, Link_list, Car_list, communication_range)
     sys.stdout.flush()
     traci.close()
 
@@ -394,7 +400,7 @@ if __name__ == "__main__":
 
     net = 'exam1no.net.xml'
     communication_range = 25
-    f = open('infoResult20190617_range25_test.csv',"w")
+    f = open('infoResult20190617_range25_QueueTest.csv',"w")
     csvWriter = csv.writer(f)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
