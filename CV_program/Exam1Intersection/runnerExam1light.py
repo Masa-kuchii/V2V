@@ -1,22 +1,5 @@
-#!/usr/bin/env python
-# Eclipse SUMO, Simulation of Urban MObility; see https://eclipse.org/sumo
-# Copyright (C) 2009-2017 German Aerospace Center (DLR) and others.
-# This program and the accompanying materials
-# are made available under the terms of the Eclipse Public License v2.0
-# which accompanies this distribution, and is available at
-# http://www.eclipse.org/legal/epl-v20.html
-
-# @file    runner.py
-# @author  Lena Kalleske
-# @author  Daniel Krajzewicz
-# @author  Michael Behrisch
-# @author  Jakob Erdmann
-# @date    2009-03-26
-# @version $Id$
-
 """
-Tutorial for traffic light control via the TraCI interface.
-This scenario models a pedestrian crossing which switches on demand.
+Program used in the article "Queue length estimation through a simple V2V communication protocol"
 """
 from __future__ import absolute_import
 from __future__ import print_function
@@ -29,7 +12,7 @@ import random
 import csv
 
 
-# the directory in which this script resides
+# the directory where this script resides
 THISDIR = os.path.dirname(__file__)
 
 
@@ -56,6 +39,7 @@ class Car_Info:
         self.n = {}
         self.St = {}
         self.Ut = {}
+
 class Link_Info:
     def __init__(self,id):
         self.id = id
@@ -63,17 +47,72 @@ class Link_Info:
         self.outnum = []
         self.outcount = -1
         self.outflow = 0
+        self.inflow = GetEdgeCapacity(id)
         self.outflowhead = 0
         self.innum = []
         self.incount = 0
         self.lastvehs = [0]
         self.queue = 0
+    def GetLinkcapacity(self):
+        return self.inflow
+
+class Eta:
+    def __init__(self):
+        self.value = 1.0
+        self.hist = [(0,1.0)]
+    def GetEta(self):
+        return self.value
+    def CountInconsis(self, carids, carlist, QueueLinkIDs,time):
+        num_con = 0
+        num_incon = 0
+        for linkid in QueueLinkIDs:
+            InconPattern = []
+            for j in carids:
+                car = carlist[j]
+                St = 0.0
+                Ut = 100000
+                if (linkid in car.n.keys()):
+                    for n in car.n[linkid]:
+                        Car_n_Time = n[0]
+                        Car_n_Value = n[1]
+                        CarDic[Car_n_Time] = Car_n_Value
+                    for st in car.St[linkid]:
+                        Car_st_Time = st[0]
+                        Car_st_Value = st[1]
+                        newst = CarDic[Car_st_Time] + Car_st_Value*(time - Car_st_Time)
+                        if (newst > St):
+                            St = CarDic[Car_st_Time] + Car_st_Value*(time - Car_st_Time)
+                    for ut in car.Ut[linkid]:
+                        Car_ut_Time = ut[0]
+                        Car_ut_Value = ut[1]
+                        newut = CarDic[Car_ut_Time] + Car_ut_Value*(time - Car_ut_Time)
+                        if (newut < Ut):
+                            Ut = CarDic[Car_ut_Time] + Car_ut_Value*(time - Car_ut_Time)
+                    if (St > Ut):
+                        Stpattern = (Car_st_Time, Car_st_Value)
+                        Utpattern = (Car_ut_Time, Car_ut_Value)
+                        if ((Stpattern not in InconPattern) and (Utpattern not in InconPattern)):
+                            num_incon += 1
+                            InconPattern.append(Stpattern)
+                            InconPattern.append(Utpattern)
+                    else:
+                        num_con += 1
+        return num_incon
+    def FixedUpdate(self, carids, carlist, QueueLinkIDs, time, time_interval):
+        num_incon = self.CountInconsis(self, carids, carlist, QueueLinkIDs,time)
+        current_eta = self.GetEta(self)
+        if (num_incon == 0):
+            next_eta = current_eta * 0.95 #5% down
+        else:
+            next_eta = current_eta * pow(1.2, num_incon) #20% up
+        self.value = next_eta
+        self.hist.append((time, next_eta))
+        return 0
 
 
-"""V2V update: do V2V communication among drivers in the same link."""
-# # Problem: How to calulate set
+"""V2V update: V2V communication among drivers in the same link."""
 # getDistance2D(self, x1, y1, x2, y2, isGeo=False, isDriving=False)
-def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist):
+def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time, eta):
     tempcar = car_list[carid]
     tempcarPos = traci.vehicle.getPosition(carid)
     temp_group = []
@@ -88,8 +127,15 @@ def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist):
             n = []
             st = []
             ut = []
+            link_vehs = traci.edge.getLastStepVehicleIDs(j)
             for k in temp_group:
                 if j in k.n.keys():
+                    if (link_vehs != []):
+                        if ( k.id == link_vehs[-1] and traci.vehicle.getSpeed(k.id) <= 1.0 and time >= 500):
+                            n.append((time, GetQueueLength(k.id, car_list, j, comrange)))
+                            st.append((time, -eta.GetEta()*(linklist[j].outflow)))
+                            ut.append((time, eta.GetEta()*(linklist[j].inflow - linklist[j].outflow)))
+                            linklist[j].queue = GetQueueLength(k.id, car_list, j, comrange)
                     n = n + k.n[j]
                     st = st + k.St[j]
                     ut = ut + k.Ut[j]
@@ -104,72 +150,94 @@ def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist):
                 h.St[j] = stlist
                 h.Ut[j] = utlist
 
+
 """Information update when CVs exit the link"""
-# distance between two vehicles :(traci.simulationdomain.getDistanceRoad(self, edgeID1, pos1, edgeID2, pos2, isDriving=False))  Distance Type==1: driving distance
-# or getDrivingDistance(self, vehID, edgeID, pos, laneIndex=0)
-# vehicle speed: traci.vehicle.getSpeed(id)
 # edgeID:
 # edge position: traci.vehicle.getLanePosition(leadvehid)
 # h(t) = h(s) / vehicle speed. (timeheadway =spaceheadway/speed)
 # flow = 1/timeheadway
 # qin = maximam incoming flow = minimum gap it is fixed value
-# Exit information V2Vupdate
 # 1.5m/s
-# Queue length definition 1 : length from the junction until the last vehicle with a speed lower than 5 km/h
-# Queue length definition 2: The Number of the vehicles traveling with a speed lower than 5 km/h
-def ExitUpdate(linklist, car_list, linkid, time, outputcarid, comrange):
+def ExitUpdate(linklist, car_list, linkid, time, outputcarid, comrange, eta):
     if ((outputcarid != 0) and (traci.edge.getLastStepVehicleNumber(linkid) > 3) and outputcarid in traci.vehicle.getIDList()):
-        outcarPos = traci.vehicle.getPosition(outputcarid)
-        vehIDs = traci.edge.getLastStepVehicleIDs(linkid)
-        vehIDs_reverse = traci.edge.getLastStepVehicleIDs(linkid)
-        vehIDs_reverse.reverse()
-        n = 0
-        platoon = []
-        for i in range(len(vehIDs)):
-            mae = vehIDs_reverse[i]
-            mae_posi = traci.vehicle.getPosition(mae)
-            if (traci.simulation.getDistance2D(outcarPos[0], outcarPos[1], mae_posi[0], mae_posi[1], 0, 0) > comrange or mae == vehIDs_reverse[-1]):
-                break
-            ushiro = vehIDs_reverse[i+1]
-            ushiro_posi = traci.vehicle.getPosition(ushiro)
-            if (traci.simulation.getDistance2D(outcarPos[0], outcarPos[1], ushiro_posi[0], ushiro_posi[1], 0, 0) > comrange):
-                break
-            two_veh_dis = traci.simulation.getDistance2D(mae_posi[0], mae_posi[1], ushiro_posi[0], ushiro_posi[1], 0, 0)
-            if (two_veh_dis <= 15):
-                if (mae not in platoon):
-                    platoon.append(mae)
-                if (ushiro not in platoon):
-                    platoon.append(ushiro)
-        if (platoon != []):
-            for j in platoon:
-                if (traci.vehicle.getSpeed(j) < 5.0):
-                    n += 1
+        n = GetQueueLength(outputcarid, car_list, linkid, comrange)
         if (n > 0):
-            leadvehid = vehIDs[-1]
-            lastvehid = vehIDs[0]
+            # leadvehid = vehIDs[-1]
+            # lastvehid = vehIDs[0]
             # lastvehspeed =  traci.vehicle.getSpeed(lastvehid) #[m/s]
             # lead2Vehspeed = traci.vehicle.getSpeed(lead2Vehid)
             # InDistanceheadwayMin = traci.vehicle.getMinGap(lastvehid) #[m]
             # OutDistanceheadway = traci.vehicle.getDrivingDistance(lead2Vehid, linkid, traci.vehicle.getLanePosition(leadvehid), laneIndex=0) #[m]
             # OutTimeheadway = traci.vehicle.getTau(lastvehid) #OutDistanceheadway / lead2Vehspeed #[s]
             Outflow = linklist[linkid].outflow #veh/s
-            Inflowmax = 0.55 #veh/s
+            Inflowmax = 0.55 #veh/s here, GetlinkCapacity
             tempCar = car_list[outputcarid]
             if (linkid not in tempCar.n.keys() ):
                 tempCar.n[linkid]= []
                 tempCar.St[linkid] = []
                 tempCar.Ut[linkid] = []
             tempCar.n[linkid].append((time, n))
-            tempCar.St[linkid].append((time, -Outflow))
-            tempCar.Ut[linkid].append((time,(Inflowmax - Outflow)))
-            # tempCar.St[linkid].append((time, -1))
-            # tempCar.Ut[linkid].append((time,(0.5)))
+            tempCar.St[linkid].append((time, -eta.GetEta()*Outflow))
+            print(Outflow)
+            tempCar.Ut[linkid].append((time,eta.GetEta()*(Inflowmax - Outflow)))
             linklist[linkid].queue = n
             tempCar.lasttime = time
-#
+    else:
+        print("No car")
+    return 0
+
+
+def GetQueueLength(carid, car_list, linkid, comrange):
+    car = car_list[carid]
+    carPos = traci.vehicle.getPosition(carid)
+    vehIDs = traci.edge.getLastStepVehicleIDs(linkid)
+    vehIDs_reverse = traci.edge.getLastStepVehicleIDs(linkid)
+    vehIDs_reverse.reverse()
+    queue = 0
+    platoon = []
+    for i in range(len(vehIDs)):
+        mae = vehIDs_reverse[i]
+        mae_posi = traci.vehicle.getPosition(mae)
+        if (traci.simulation.getDistance2D(carPos[0], carPos[1], mae_posi[0], mae_posi[1], 0, 0) > comrange or mae == vehIDs_reverse[-1]):
+            break
+        ushiro = vehIDs_reverse[i+1]
+        ushiro_posi = traci.vehicle.getPosition(ushiro)
+        if (traci.simulation.getDistance2D(carPos[0], carPos[1], ushiro_posi[0], ushiro_posi[1], 0, 0) > comrange):
+            if (traci.vehicle.getSpeed(mae) <= 5.0):
+                queue = 1
+                break
+            else:
+                break
+        two_veh_dis = traci.simulation.getDistance2D(mae_posi[0], mae_posi[1], ushiro_posi[0], ushiro_posi[1], 0, 0)
+        if (two_veh_dis <= 15):
+            if (mae not in platoon):
+                platoon.append(mae)
+            if (ushiro not in platoon):
+                platoon.append(ushiro)
+    if (platoon != []):
+        for j in platoon:
+            if (traci.vehicle.getSpeed(j) <= 5.0):
+                queue += 1
+    return queue
+
+
+def GetEdgeCapacity(linkid):
+    inflowmaxcurrent = 0.55
+    try:
+        lanenum = traci.edge.getLaneNumber(linkid)
+        print("ari")
+    except AttributeError:
+        print("No lane")
+        lanenum = 1
+    capacity = inflowmaxcurrent*lanenum
+    return capacity
+
+# ooutput of vehicle information for debugging.
+def CsvVehicleOutput():
+    return 0
 
 # Time n outflow inflow ,edgeforwardcarst edgeforwardcarut edgebackwardcarst edgebackwardcarut edgeTraveltime edgeaverageflow,
-def Csvoutput(writer,time, linklist, car_list):
+def Csvoutput(writer,time, linklist, car_list,comrange):
     onlyidlist = ["AtoB","BtoA","AtoC","BtoC","CtoCright"]
     if (time == 1):
         name = ["time","queue length n","outflow","inflow","AtoB Lead st","AtoB Lead ut","AtoB last st","AtoB last ut","AtoBTT","AtoBEF","AtoBSpeed","BtoA Lead st","BtoA Lead ut","BtoA last st","BtoA last ut","BtoATT","BtoAEF","BtoASpeed","AtoC Lead st","AtoC Lead ut","AtoC last st","AtoC last ut","AtoCTT","AtoCEF","AtoCSpeed","BtoC Lead st","BtoC Lead ut","BtoC last st","BtoC last ut","BtoCTT","BtoCEF","BtoCSpeed","CtoCright Lead st","CtoCright Lead ut","CtoCright last st","CtoCright last ut","CtoCrightTT","CtoCrightEF","CtoCrightSpeed"]
@@ -178,7 +246,10 @@ def Csvoutput(writer,time, linklist, car_list):
         val = []
         val.append(time)
         vehicles = traci.edge.getLastStepVehicleIDs("BtoA")
-        n = linklist["BtoA"].queue
+        n = 0
+        if (vehicles != []):
+            n = GetQueueLength(vehicles[-1], car_list, "BtoA", comrange)
+        # n = linklist["BtoA"].queue
         # if (traci.edge.getLastStepHaltingNumber("BtoA") >= 0):
         #     for i in vehicles:
         #         if (traci.vehicle.getSpeed(i) < 5.0):
@@ -260,6 +331,7 @@ def Csvoutput(writer,time, linklist, car_list):
                 val.append(linklist[i].outflow)
                 val.append(traci.edge.getLastStepMeanSpeed(i))
         writer.writerow(val)
+    return 0
 
 
 
@@ -271,11 +343,15 @@ def run():
     for i in Link_id_list:
         Link_list[i] = Link_Info(i)
     # Car_list
+    print(Link_list)
     Car_list = {}
+    # eta
+    eta = Eta()
     # main loop. do something every simulation step until no more vehicles are
     # loaded or running
     while traci.simulation.getMinExpectedNumber() > 0:
         traci.simulationStep()
+        time = traci.simulation.getCurrentTime()/1000
         for carid in traci.vehicle.getIDList():
             if carid not in Car_list.keys():
                 Car_list[carid] = Car_Info(carid)
@@ -293,15 +369,11 @@ def run():
                     temp_link.outnum.append(temp_out)
                     outputCar = temp_link.lastvehs[-1]
                     temp_link.lasttime = traci.simulation.getCurrentTime()/1000
-                    time = traci.simulation.getCurrentTime()/1000
-                    ExitUpdate(Link_list, Car_list,j,time,outputCar,communication_range)
+                    ExitUpdate(Link_list, Car_list,j,time,outputCar,communication_range,eta)
                     temp_link.lastvehs = CurrentVehs
         for h in traci.vehicle.getIDList():
-            V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list)
-        timeman = traci.simulation.getCurrentTime()/1000
-        # print(timeman)
-        # print(traci.edge.getLastStepHaltingNumber("BtoA"))
-        Csvoutput(csvWriter,timeman, Link_list, Car_list)
+            V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
+        Csvoutput(csvWriter,time, Link_list, Car_list, communication_range)
     sys.stdout.flush()
     traci.close()
 
@@ -328,7 +400,7 @@ if __name__ == "__main__":
 
     net = 'exam1light.net.xml'
     communication_range = 100
-    f = open('Infolight20190527_range100.csv',"w")
+    f = open('Infolight20190618_range100_queuetest.csv',"w")
     csvWriter = csv.writer(f)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
