@@ -71,6 +71,7 @@ class Eta:
                 car = carlist[j]
                 St = 0.0
                 Ut = 100000
+                CarDic ={}
                 if (linkid in car.n.keys()):
                     for n in car.n[linkid]:
                         Car_n_Time = n[0]
@@ -99,8 +100,8 @@ class Eta:
                         num_con += 1
         return num_incon
     def FixedUpdate(self, carids, carlist, QueueLinkIDs, time, time_interval):
-        num_incon = self.CountInconsis(self, carids, carlist, QueueLinkIDs,time)
-        current_eta = self.GetEta(self)
+        num_incon = self.CountInconsis(carids, carlist, QueueLinkIDs,time)
+        current_eta = self.GetEta()
         if (num_incon == 0):
             next_eta = current_eta * 0.95 #5% down
         else:
@@ -108,6 +109,17 @@ class Eta:
         self.value = next_eta
         self.hist.append((time, next_eta))
         return 0
+    def csvoutput(self, writer):
+        list = self.hist
+        header = ["time", "etavalue"]
+        writer.writerow(header)
+        for i in list:
+            time = i[0]
+            value = i[1]
+            temp = [time, value]
+            writer.writerow(temp)
+
+
 
 
 """V2V update: V2V communication among drivers in the same link."""
@@ -225,9 +237,7 @@ def GetEdgeCapacity(linkid):
     inflowmaxcurrent = 0.55
     try:
         lanenum = traci.edge.getLaneNumber(linkid)
-        print("ari")
     except AttributeError:
-        print("No lane")
         lanenum = 1
     capacity = inflowmaxcurrent*lanenum
     return capacity
@@ -340,6 +350,7 @@ def run():
     # Link list
     Link_id_list = traci.edge.getIDList()
     Link_list = {}
+    QueueLinkIDs = []
     for i in Link_id_list:
         Link_list[i] = Link_Info(i)
     # Car_list
@@ -373,7 +384,10 @@ def run():
                     temp_link.lastvehs = CurrentVehs
         for h in traci.vehicle.getIDList():
             V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
+        # eta.FixedUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"], time, 1)
         Csvoutput(csvWriter,time, Link_list, Car_list, communication_range)
+        # if (time == 4200):
+        #     eta.csvoutput(etawriter)
     sys.stdout.flush()
     traci.close()
 
@@ -399,9 +413,11 @@ if __name__ == "__main__":
         sumoBinary = checkBinary('sumo-gui')
 
     net = 'exam1no.net.xml'
-    communication_range = 25
-    f = open('infoResult20190617_range25_QueueTest.csv',"w")
+    communication_range = 100
+    f = open('infoResult20190618_range100_queuetest.csv',"w")
     csvWriter = csv.writer(f)
+    ff = open('eta20190618_range100_queuetest.csv',"w")
+    etawriter = csv.writer(ff)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
     traci.start([sumoBinary, '-c', 'exam1no.sumocfg', '--queue-output', 'queue.xml'])
