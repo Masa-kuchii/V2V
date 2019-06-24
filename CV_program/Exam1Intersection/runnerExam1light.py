@@ -60,6 +60,7 @@ class Eta:
     def __init__(self):
         self.value = 1.0
         self.hist = [(0,1.0)]
+        self.dic = {0:1.0}
     def GetEta(self):
         return self.value
     def CountInconsis(self, carids, carlist, QueueLinkIDs,time):
@@ -71,6 +72,7 @@ class Eta:
                 car = carlist[j]
                 St = 0.0
                 Ut = 100000
+                CarDic ={}
                 if (linkid in car.n.keys()):
                     for n in car.n[linkid]:
                         Car_n_Time = n[0]
@@ -79,15 +81,21 @@ class Eta:
                     for st in car.St[linkid]:
                         Car_st_Time = st[0]
                         Car_st_Value = st[1]
-                        newst = CarDic[Car_st_Time] + Car_st_Value*(time - Car_st_Time)
+                        sum_st_slope = 0
+                        for tichan in range(Car_st_Time,time,1):
+                            sum_st_slope += self.dic[tichan]*Car_st_Value*1.0
+                        newst = CarDic[Car_st_Time] + sum_st_slope
                         if (newst > St):
-                            St = CarDic[Car_st_Time] + Car_st_Value*(time - Car_st_Time)
+                            St = CarDic[Car_st_Time] + sum_st_slope
                     for ut in car.Ut[linkid]:
                         Car_ut_Time = ut[0]
                         Car_ut_Value = ut[1]
-                        newut = CarDic[Car_ut_Time] + Car_ut_Value*(time - Car_ut_Time)
+                        sum_ut_slope = 0
+                        for tichan in range(Car_ut_Time,time,1):
+                            sum_ut_slope += self.dic[tichan]*Car_ut_Value*1.0
+                        newut = CarDic[Car_ut_Time] + sum_ut_slope
                         if (newut < Ut):
-                            Ut = CarDic[Car_ut_Time] + Car_ut_Value*(time - Car_ut_Time)
+                            Ut = CarDic[Car_ut_Time] + sum_ut_slope
                     if (St > Ut):
                         Stpattern = (Car_st_Time, Car_st_Value)
                         Utpattern = (Car_ut_Time, Car_ut_Value)
@@ -99,15 +107,27 @@ class Eta:
                         num_con += 1
         return num_incon
     def FixedUpdate(self, carids, carlist, QueueLinkIDs, time, time_interval):
-        num_incon = self.CountInconsis(self, carids, carlist, QueueLinkIDs,time)
-        current_eta = self.GetEta(self)
+        num_incon = self.CountInconsis(carids, carlist, QueueLinkIDs,time)
+        current_eta = self.GetEta()
         if (num_incon == 0):
             next_eta = current_eta * 0.95 #5% down
         else:
             next_eta = current_eta * pow(1.2, num_incon) #20% up
         self.value = next_eta
         self.hist.append((time, next_eta))
+        self.dic[time] = next_eta
         return 0
+    def csvoutput(self, writer):
+        list = self.hist
+        header = ["time", "etavalue"]
+        writer.writerow(header)
+        for i in list:
+            time = i[0]
+            value = i[1]
+            temp = [time, value]
+            writer.writerow(temp)
+
+
 
 
 """V2V update: V2V communication among drivers in the same link."""
@@ -202,7 +222,7 @@ def GetQueueLength(carid, car_list, linkid, comrange):
             break
         ushiro = vehIDs_reverse[i+1]
         ushiro_posi = traci.vehicle.getPosition(ushiro)
-        if (traci.simulation.getDistance2D(carPos[0], carPos[1], ushiro_posi[0], ushiro_posi[1], 0, 0) > comrange):
+        if (i == 0 and traci.simulation.getDistance2D(carPos[0], carPos[1], ushiro_posi[0], ushiro_posi[1], 0, 0) > comrange):
             if (traci.vehicle.getSpeed(mae) <= 5.0):
                 queue = 1
                 break
@@ -225,9 +245,7 @@ def GetEdgeCapacity(linkid):
     inflowmaxcurrent = 0.55
     try:
         lanenum = traci.edge.getLaneNumber(linkid)
-        print("ari")
     except AttributeError:
-        print("No lane")
         lanenum = 1
     capacity = inflowmaxcurrent*lanenum
     return capacity
@@ -340,6 +358,7 @@ def run():
     # Link list
     Link_id_list = traci.edge.getIDList()
     Link_list = {}
+    QueueLinkIDs = []
     for i in Link_id_list:
         Link_list[i] = Link_Info(i)
     # Car_list
@@ -373,7 +392,10 @@ def run():
                     temp_link.lastvehs = CurrentVehs
         for h in traci.vehicle.getIDList():
             V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
+        eta.FixedUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"], time, 1)
         Csvoutput(csvWriter,time, Link_list, Car_list, communication_range)
+        if (time == 1200):
+            eta.csvoutput(etawriter)
     sys.stdout.flush()
     traci.close()
 
@@ -399,9 +421,11 @@ if __name__ == "__main__":
         sumoBinary = checkBinary('sumo-gui')
 
     net = 'exam1light.net.xml'
-    communication_range = 100
-    f = open('Infolight20190618_range100_queuetest.csv',"w")
+    communication_range = 50
+    f = open('Infolight20190619_range50_etatest.csv',"w")
     csvWriter = csv.writer(f)
+    ff = open('etaInfolight20190619_range50_etatest.csv',"w")
+    etawriter = csv.writer(ff)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
     traci.start([sumoBinary, '-c', 'exam1light.sumocfg', '--queue-output', 'queue.xml'])
