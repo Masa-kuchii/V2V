@@ -117,6 +117,46 @@ class Eta:
         self.hist.append((time, next_eta))
         self.dic[time] = next_eta
         return 0
+    def Lossfunction(self, carids, carlist, QueueLinkIDs,time):
+        U = (ut - st)*(ut - st)
+        E = ()
+        for linkid in QueueLinkIDs:
+            InconPattern = []
+            for j in carids:
+                car = carlist[j]
+                St = 0.0
+                Ut = 100000
+                CarDic ={}
+                if (linkid in car.n.keys()):
+                    for n in car.n[linkid]:
+                        Car_n_Time = n[0]
+                        Car_n_Value = n[1]
+                        CarDic[Car_n_Time] = Car_n_Value
+                    for st in car.St[linkid]:
+                        Car_st_Time = st[0]
+                        Car_st_Value = st[1]
+                        sum_st_slope = 0
+                        for tichan in range(Car_st_Time,time,1):
+                            sum_st_slope += self.dic[tichan]*Car_st_Value*1.0
+                        newst = CarDic[Car_st_Time] + sum_st_slope
+                        if (newst > St):
+                            St = CarDic[Car_st_Time] + sum_st_slope
+                    for ut in car.Ut[linkid]:
+                        Car_ut_Time = ut[0]
+                        Car_ut_Value = ut[1]
+                        sum_ut_slope = 0
+                        for tichan in range(Car_ut_Time,time,1):
+                            sum_ut_slope += self.dic[tichan]*Car_ut_Value*1.0
+                        newut = CarDic[Car_ut_Time] + sum_ut_slope
+                        if (newut < Ut):
+                            Ut = CarDic[Car_ut_Time] + sum_ut_slope
+                    U = (Ut-St)*(Ut-St)
+                    E = ()
+        return 0
+    def Numericalgradient(self):
+        return 0
+    def LossUpdate(self):
+        return 0
     def csvoutput(self, writer):
         list = self.hist
         header = ["time", "etavalue"]
@@ -155,7 +195,6 @@ def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time, eta
                             n.append((time, GetQueueLength(k.id, car_list, j, comrange)))
                             st.append((time, -eta.GetEta()*(linklist[j].outflow)))
                             ut.append((time, eta.GetEta()*(linklist[j].inflow - linklist[j].outflow)))
-                            linklist[j].queue = GetQueueLength(k.id, car_list, j, comrange)
                     n = n + k.n[j]
                     st = st + k.St[j]
                     ut = ut + k.Ut[j]
@@ -200,7 +239,6 @@ def ExitUpdate(linklist, car_list, linkid, time, outputcarid, comrange, eta):
             tempCar.St[linkid].append((time, -eta.GetEta()*Outflow))
             print(Outflow)
             tempCar.Ut[linkid].append((time,eta.GetEta()*(Inflowmax - Outflow)))
-            linklist[linkid].queue = n
             tempCar.lasttime = time
     else:
         print("No car")
@@ -379,6 +417,7 @@ def run():
             CurrentVehs = traci.edge.getLastStepVehicleIDs(j)
             temp_link = Link_list[j]
             if (CurrentVehs != []):
+                temp_link.queue = GetQueueLength(CurrentVehs[-1], Car_list, "BtoA", communication_range)
                 if (CurrentVehs[-1] != temp_link.lastvehs[-1]):
                     temp_link.outcount += 1
                     temp_out = (traci.simulation.getCurrentTime()/1000,temp_link.outcount)
@@ -422,9 +461,9 @@ if __name__ == "__main__":
 
     net = 'exam1light.net.xml'
     communication_range = 50
-    f = open('Infolight20190619_range50_etatest.csv',"w")
+    f = open('Infolight20190624_range50_etatest.csv',"w")
     csvWriter = csv.writer(f)
-    ff = open('etaInfolight20190619_range50_etatest.csv',"w")
+    ff = open('etaInfolight20190624_range50_etatest.csv',"w")
     etawriter = csv.writer(ff)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
