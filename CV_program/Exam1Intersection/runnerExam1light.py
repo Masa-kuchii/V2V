@@ -184,6 +184,66 @@ class Eta:
             if (ntrue < newst):
                 E += (newst - ntrue )*(newst - ntrue)
         return  (U + E)
+    def SimpleLossFunction(self, neweta, oldst, stslope, oldut, utslope, ntrue):
+        newst = oldst - self.value*stslope*1.0 + neweta*stslope*1.0
+        newut = oldut - self.value*utslope*1.0 + neweta*utslope*1.0
+        U = (ntrue-newut/2-newst/2)/(newut-newst)
+        return  (U*U)
+    def SimpleLossFunction_grad(self, carids, carlist, QueueLinkIDs,linklist,time):
+        h = 1e-4
+        Loss = 0
+        Lossalphatasu = 0
+        Lossalphahiku = 0
+        for linkid in QueueLinkIDs:
+            link_temp = linklist[linkid]
+            link_temp.Loss = 0
+            for j in carids:
+                C1 = 0
+                C2 = 0
+                C3 = 0
+                C4 = 0
+                car = carlist[j]
+                St = 0.0
+                Ut = 100000
+                CarDic ={}
+                if (linkid in car.n.keys()):
+                    ture_st_slope = 100
+                    ture_ut_slope = 100
+                    for n in car.n[linkid]:
+                        Car_n_Time = n[0]
+                        Car_n_Value = n[1]
+                        CarDic[Car_n_Time] = Car_n_Value
+                    for st in car.St[linkid]:
+                        Car_st_Time = st[0]
+                        Car_st_Value = st[1]
+                        if (ture_st_slope == 100):
+                            ture_st_slope = Car_st_Value
+                        sum_st_slope = 0
+                        for tichan in range(Car_st_Time,time,1):
+                            sum_st_slope += self.dic[tichan]*Car_st_Value*1.0
+                        newst = CarDic[Car_st_Time] + sum_st_slope
+                        if (newst > St):
+                            St = CarDic[Car_st_Time] + sum_st_slope
+                            ture_st_slope = Car_st_Value
+                    for ut in car.Ut[linkid]:
+                        Car_ut_Time = ut[0]
+                        Car_ut_Value = ut[1]
+                        if (ture_ut_slope == 100):
+                            ture_ut_slope = Car_ut_Value
+                        sum_ut_slope = 0
+                        for tichan in range(Car_ut_Time,time,1):
+                            sum_ut_slope += self.dic[tichan]*Car_ut_Value*1.0
+                        newut = CarDic[Car_ut_Time] + sum_ut_slope
+                        if (newut < Ut):
+                            Ut = CarDic[Car_ut_Time] + sum_ut_slope
+                            ture_ut_slope = Car_ut_Value
+                    # Calculate Loss function
+                    Loss += self.LossFunction(self.value, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                    Lossalphatasu += self.LossFunction(self.value+h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                    Lossalphahiku += self.LossFunction(self.value-h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+        self.Lossdic.append((time,Loss))
+        gradient = (Lossalphatasu - Lossalphahiku)/2/h
+        return gradient
     def LossUpdate(self,carids, carlist, QueueLinkIDs,linklist,time, step_size):
         dldeta = self.Lossgradient(carids, carlist, QueueLinkIDs,linklist,time)
         current_eta = self.GetEta()
