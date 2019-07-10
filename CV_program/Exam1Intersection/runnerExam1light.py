@@ -64,6 +64,8 @@ class Eta:
         self.hist = [(0,1.0)]
         self.dic = {0:1.0}
         self.Lossdic = [(0,1.0)]
+        self.Lossnumegrad = [(0,1.0)]
+        self.Losssimpgrad = [(0,1.0)]
     def GetEta(self):
         return self.value
     def CountInconsis(self, carids, carlist, QueueLinkIDs,time):
@@ -120,7 +122,7 @@ class Eta:
         self.hist.append((time, next_eta))
         self.dic[time] = next_eta
         return 0
-    def Lossgradient(self, carids, carlist, QueueLinkIDs,linklist,time):
+    def Lossgradient(self, carids, carlist, QueueLinkIDs,linklist,time,whichLoss = True):
         h = 1e-4
         Loss = 0
         Lossalphatasu = 0
@@ -164,12 +166,19 @@ class Eta:
                         if (newut < Ut):
                             Ut = CarDic[Car_ut_Time] + sum_ut_slope
                             ture_ut_slope = Car_ut_Value
-                    # Calculate Loss function
-                    Loss += self.LossFunction(self.value, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
-                    Lossalphatasu += self.LossFunction(self.value+h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
-                    Lossalphahiku += self.LossFunction(self.value-h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                    # Calculate using simple Loss LossFunction (kuchii's definition)
+                    if (whichLoss == True):
+                        Loss += self.LossFunction(self.value, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                        Lossalphatasu += self.LossFunction(self.value+h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                        Lossalphahiku += self.LossFunction(self.value-h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                    # Calculate Loss function Gunnar's definition
+                    elif (whichLoss == False):
+                        Loss += self.SimpleLossFunction(self.value, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                        Lossalphatasu += self.SimpleLossFunction(self.value+h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                        Lossalphahiku += self.SimpleLossFunction(self.value-h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
         self.Lossdic.append((time,Loss))
         gradient = (Lossalphatasu - Lossalphahiku)/2/h
+        self.Lossnumegrad.append((time,gradient))
         return gradient
     def LossFunction(self, neweta, oldst, stslope, oldut, utslope, ntrue):
         newst = oldst - self.value*stslope*1.0 + neweta*stslope*1.0
@@ -187,13 +196,12 @@ class Eta:
     def SimpleLossFunction(self, neweta, oldst, stslope, oldut, utslope, ntrue):
         newst = oldst - self.value*stslope*1.0 + neweta*stslope*1.0
         newut = oldut - self.value*utslope*1.0 + neweta*utslope*1.0
-        U = (ntrue-newut/2-newst/2)/(newut-newst)
+        U = (ntrue-newut/2-newst/2)/(newut-newst)/2
         return  (U*U)
-    def SimpleLossFunction_grad(self, carids, carlist, QueueLinkIDs,linklist,time):
+    def SimpleLossFunction_directGrad(self, carids, carlist, QueueLinkIDs,linklist,time):
         h = 1e-4
         Loss = 0
-        Lossalphatasu = 0
-        Lossalphahiku = 0
+        Loss_gradient = 0
         for linkid in QueueLinkIDs:
             link_temp = linklist[linkid]
             link_temp.Loss = 0
@@ -221,10 +229,11 @@ class Eta:
                         sum_st_slope = 0
                         for tichan in range(Car_st_Time,time,1):
                             sum_st_slope += self.dic[tichan]*Car_st_Value*1.0
-                        newst = CarDic[Car_st_Time] + sum_st_slope
+                        newst = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*self.value
                         if (newst > St):
-                            St = CarDic[Car_st_Time] + sum_st_slope
+                            St = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*self.value
                             ture_st_slope = Car_st_Value
+                            ture_st_n = CarDic[Car_st_Time]
                     for ut in car.Ut[linkid]:
                         Car_ut_Time = ut[0]
                         Car_ut_Value = ut[1]
@@ -233,35 +242,47 @@ class Eta:
                         sum_ut_slope = 0
                         for tichan in range(Car_ut_Time,time,1):
                             sum_ut_slope += self.dic[tichan]*Car_ut_Value*1.0
-                        newut = CarDic[Car_ut_Time] + sum_ut_slope
+                        newut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*self.value
                         if (newut < Ut):
-                            Ut = CarDic[Car_ut_Time] + sum_ut_slope
+                            Ut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*self.value
                             ture_ut_slope = Car_ut_Value
+                            ture_ut_n = CarDic[Car_ut_Time]
                     # Calculate Loss function
-                    Loss += self.LossFunction(self.value, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
-                    Lossalphatasu += self.LossFunction(self.value+h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
-                    Lossalphahiku += self.LossFunction(self.value-h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
-        self.Lossdic.append((time,Loss))
-        gradient = (Lossalphatasu - Lossalphahiku)/2/h
-        return gradient
-    def LossUpdate(self,carids, carlist, QueueLinkIDs,linklist,time, step_size):
-        dldeta = self.Lossgradient(carids, carlist, QueueLinkIDs,linklist,time)
+                    Loss += self.SimpleLossFunction(self.value, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                    C1 = link_temp.queue - ((Ut- self.value * ture_ut_slope)+(St - self.value * ture_st_slope))/2
+                    C2 = -(ture_ut_slope + ture_st_slope)/2
+                    C3 = (ture_ut_slope - ture_st_slope)
+                    C4 = (Ut- self.value * ture_ut_slope) - (St - self.value * ture_st_slope)
+                    bunnshi = (link_temp.queue - (St + Ut)/2)*(C1*C3 - C2*C4)
+                    bunnbo = (Ut - St)*(Ut - St)*(Ut - St)
+                    Loss_gradient += bunnshi / bunnbo
+        # self.Lossdic.append((time,Loss))
+        self.Losssimpgrad.append((time,Loss_gradient))
+        return Loss_gradient
+    def LossUpdate(self,carids, carlist, QueueLinkIDs,linklist,time, step_size, Grad = True):
+        if (Grad == True):
+            dldeta = self.SimpleLossFunction_directGrad(carids, carlist, QueueLinkIDs,linklist, time)
+        elif (Grad == False):
+            dldeta = self.Lossgradient(carids, carlist, QueueLinkIDs,linklist, time, False)
         current_eta = self.GetEta()
         next_eta = current_eta - dldeta*step_size
         self.value = next_eta
         self.hist.append((time, current_eta))
-        self.dic[time] = current_eta
+        self.dic[time+1] = next_eta
         return 0
     def csvoutput(self, writer):
         list = self.hist
         loss_list = self.Lossdic
-        header = ["time", "etavalue", "Loss"]
+        GradNume = self.Lossnumegrad
+        # Gradmath = self.Losssimpgrad
+        header = ["time", "etavalue", "Loss", "Grad"]
         writer.writerow(header)
         for i in range(len(list)):
             time = list[i][0]
             value = list[i][1]
             loss = loss_list[i][1]
-            temp = [time, value, loss]
+            gradnu = GradNume[i][1]
+            temp = [time, value, loss, gradnu]
             writer.writerow(temp)
         # for i in list:
         #     time = i[0]
@@ -535,9 +556,9 @@ def run():
         for h in traci.vehicle.getIDList():
             V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
         # eta.FixedUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"], time, 1)
-        eta.LossUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"],Link_list,time, 0.001)
+        eta.LossUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"],Link_list,time, 0.0001,False)
         Csvoutput(csvWriter,time, Link_list, Car_list, communication_range)
-        if (time == 1500):
+        if (time == 500):
             eta.csvoutput(etawriter)
     sys.stdout.flush()
     traci.close()
@@ -565,9 +586,9 @@ if __name__ == "__main__":
 
     net = 'exam1light.net.xml'
     communication_range = 50
-    f = open('Infolight20190625_range50_etatest_step0.001.csv',"w")
+    f = open('Infolight20190710_range50_etasimple_step0.0001.csv',"w")
     csvWriter = csv.writer(f)
-    ff = open('etaInfolight20190625_range50_etateststep0.001.csv',"w")
+    ff = open('etaInfolight20190710_range50_etasimple_step0.0001.csv',"w")
     etawriter = csv.writer(ff)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
