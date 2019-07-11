@@ -313,13 +313,16 @@ def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time, eta
             stset = set(st)
             utset = set(ut)
             nlist = list(nset)
+            nlist_small = [i for i in nlist if (time - i[0]) < 300]
             stlist = list(stset)
+            stlist_small = [i for i in stlist if (time - i[0]) < 300]
             utlist = list(utset)
+            utlist_small = [i for i in utlist if (time - i[0]) < 300]
             if (nlist != []):
                 for h in temp_group:
-                    h.n[j] = nlist
-                    h.St[j] = stlist
-                    h.Ut[j] = utlist
+                    h.n[j] = nlist_small
+                    h.St[j] = stlist_small
+                    h.Ut[j] = utlist_small
 
 
 """Information update when CVs exit the link"""
@@ -545,6 +548,8 @@ def run():
         Csvoutput(csvWriter,time, Link_list, Car_list, communication_range)
         if (time == 1500):
             eta.csvoutput(etawriter)
+        if (time == 4250):
+            sys.exit()
     sys.stdout.flush()
     traci.close()
 
@@ -571,9 +576,9 @@ if __name__ == "__main__":
 
     net = 'exam1no.net.xml'
     communication_range = 50
-    f = open('infoResult20190711_range50_0.0001.csv',"w")
+    f = open('infoResult20190711_range50_0.0001_fasttest.csv',"w")
     csvWriter = csv.writer(f)
-    ff = open('eta20190711_range50_0.0001.csv',"w")
+    ff = open('eta20190711_range50_0.0001_fasttest.csv',"w")
     etawriter = csv.writer(ff)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
