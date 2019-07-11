@@ -405,7 +405,7 @@ def CsvVehicleOutput():
     return 0
 
 # Time n outflow inflow ,edgeforwardcarst edgeforwardcarut edgebackwardcarst edgebackwardcarut edgeTraveltime edgeaverageflow,
-def Csvoutput(writer,time, linklist, car_list,comrange):
+def Csvoutput(writer,time, linklist, car_list,comrange,eta):
     onlyidlist = ["AtoB","BtoA","AtoC","BtoC","CtoCright"]
     if (time == 1):
         name = ["time","queue length n","outflow","inflow","AtoB Lead st","AtoB Lead ut","AtoB last st","AtoB last ut","AtoBTT","AtoBEF","AtoBSpeed","BtoA Lead st","BtoA Lead ut","BtoA last st","BtoA last ut","BtoATT","BtoAEF","BtoASpeed","AtoC Lead st","AtoC Lead ut","AtoC last st","AtoC last ut","AtoCTT","AtoCEF","AtoCSpeed","BtoC Lead st","BtoC Lead ut","BtoC last st","BtoC last ut","BtoCTT","BtoCEF","BtoCSpeed","CtoCright Lead st","CtoCright Lead ut","CtoCright last st","CtoCright last ut","CtoCrightTT","CtoCrightEF","CtoCrightSpeed"]
@@ -453,15 +453,21 @@ def Csvoutput(writer,time, linklist, car_list,comrange):
                     for lest in leadveh.St["BtoA"]:
                         lestt = lest[0]
                         lestslope = lest[1]
-                        newst = LeadNdic[lestt] + lestslope*(time - lestt)
+                        sum_lest_slope = 0
+                        for tichan in range(lestt,time+1,1):
+                            sum_lest_slope += eta.dic[tichan]*lestslope*1.0
+                        newst = LeadNdic[lestt] + sum_lest_slope
                         if (newst > lestvalue):
-                            lestvalue = LeadNdic[lestt] + lestslope*(time - lestt)
+                            lestvalue = LeadNdic[lestt] + sum_lest_slope
                     for leut in leadveh.Ut["BtoA"]:
                         leutt = leut[0]
                         leutslope = leut[1]
-                        newut = LeadNdic[leutt] + leutslope*(time - leutt)
+                        sum_leut_slope = 0
+                        for tichan in range(leutt,time+1,1):
+                            sum_leut_slope += eta.dic[tichan]*leutslope*1.0
+                        newut = LeadNdic[leutt] + sum_leut_slope
                         if (newut < leutvalue):
-                            leutvalue = LeadNdic[leutt] + leutslope*(time - leutt)
+                            leutvalue = LeadNdic[leutt] + sum_leut_slope
                     val.append(lestvalue)
                     val.append(leutvalue)
                 else:
@@ -480,15 +486,21 @@ def Csvoutput(writer,time, linklist, car_list,comrange):
                     for last in lastveh.St["BtoA"]:
                         lastt = last[0]
                         lastslope = last[1]
-                        newlast = LastNdic[lastt] + lastslope*(time - lastt)
+                        sum_last_slope = 0
+                        for tichan in range(lastt,time+1,1):
+                            sum_last_slope += eta.dic[tichan]*lastslope*1.0
+                        newlast = LastNdic[lastt] + sum_last_slope
                         if (newlast > lastvalue):
-                            lastvalue = LastNdic[lastt] + lastslope*(time - lastt)
+                            lastvalue = LastNdic[lastt] + sum_last_slope
                     for laut in lastveh.Ut["BtoA"]:
                         lautt = laut[0]
                         lautslope = laut[1]
-                        newlaut = LastNdic[lautt] + lautslope*(time - lautt)
+                        sum_laut_slope = 0
+                        for tichan in range(lautt,time+1,1):
+                            sum_laut_slope += eta.dic[tichan]*lautslope*1.0
+                        newlaut = LastNdic[lautt] + sum_laut_slope
                         if (newlaut < lautvalue):
-                            lautvalue = LastNdic[lautt] + lautslope*(time - lautt)
+                            lautvalue = LastNdic[lautt] + sum_laut_slope
                     val.append(lastvalue)
                     val.append(lautvalue)
                 else:
@@ -545,8 +557,8 @@ def run():
             V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
         # eta.FixedUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"], time, 1)
         eta.LossUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"],Link_list,time, 0.0001,False)
-        Csvoutput(csvWriter,time, Link_list, Car_list, communication_range)
-        if (time == 1500):
+        Csvoutput(csvWriter,time, Link_list, Car_list, communication_range,eta)
+        if (time == 4200):
             eta.csvoutput(etawriter)
         if (time == 4250):
             sys.exit()
@@ -576,9 +588,9 @@ if __name__ == "__main__":
 
     net = 'exam1no.net.xml'
     communication_range = 50
-    f = open('infoResult20190711_range50_0.0001_fasttest.csv',"w")
+    f = open('infoResult20190712_range50_0.0001_2.csv',"w")
     csvWriter = csv.writer(f)
-    ff = open('eta20190711_range50_0.0001_fasttest.csv',"w")
+    ff = open('eta20190712_range50_0.0001_2.csv',"w")
     etawriter = csv.writer(ff)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
