@@ -264,6 +264,11 @@ class Eta:
         self.hist.append((time, current_eta))
         self.dic[time+1] = next_eta
         return 0
+    def Oneupdate(self, time):
+        current_eta = self.GetEta()
+        self.hist.append((time,current_eta))
+        self.dic[time+1] = current_eta
+        return 0
     def csvoutput(self, writer):
         list = self.hist
         loss_list = self.Lossdic
