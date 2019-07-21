@@ -192,8 +192,10 @@ class Eta:
     def SimpleLossFunction(self, neweta, oldst, stslope, oldut, utslope, ntrue):
         newst = oldst - self.value*stslope*1.0 + neweta*stslope*1.0
         newut = oldut - self.value*utslope*1.0 + neweta*utslope*1.0
-        U = (ntrue-newut/2-newst/2)/(newut-newst)/2
-        return  (U*U)
+        numerator = (ntrue-(newst+newut)/2)
+        denominator = max((newut-newst), 4.0)
+        U = numerator*numerator/denominator/denominator/2
+        return  (U)
     def LossFunction_directGrad(self, carids, carlist, QueueLinkIDs,linklist,time):
         h = 1e-4
         Loss = 0
@@ -257,7 +259,7 @@ class Eta:
         if (Grad == True):
             dldeta = self.LossFunction_directGrad(carids, carlist, QueueLinkIDs,linklist, time)
         elif (Grad == False):
-            dldeta = self.Lossgradient(carids, carlist, QueueLinkIDs,linklist, time, True)
+            dldeta = self.Lossgradient(carids, carlist, QueueLinkIDs,linklist, time, False)
         current_eta = self.GetEta()
         next_eta = current_eta - dldeta*step_size
         self.value = next_eta
@@ -420,7 +422,7 @@ def Csvoutput(writer,time, linklist, car_list,comrange,eta):
         val.append(time)
         vehicles = traci.edge.getLastStepVehicleIDs("BtoA")
         n = 0
-        if (vehicles != []):
+        if (len(vehicles) != 0):
             n = GetQueueLength(vehicles[-1], car_list, "BtoA", comrange)
         # n = linklist["BtoA"].queue
         # if (traci.edge.getLastStepHaltingNumber("BtoA") >= 0):
@@ -529,7 +531,6 @@ def run():
     for i in Link_id_list:
         Link_list[i] = Link_Info(i)
     # Car_list
-    print(Link_list)
     Car_list = {}
     # eta
     eta = Eta()
@@ -545,7 +546,7 @@ def run():
         for j in traci.edge.getIDList():
             CurrentVehs = traci.edge.getLastStepVehicleIDs(j)
             temp_link = Link_list[j]
-            if (CurrentVehs != []):
+            if (len(CurrentVehs) != 0):
                 temp_link.queue = GetQueueLength(CurrentVehs[-1], Car_list, "BtoA", communication_range)
                 if (CurrentVehs[-1] != temp_link.lastvehs[-1]):
                     temp_link.outcount += 1
@@ -560,12 +561,12 @@ def run():
                     temp_link.lastvehs = CurrentVehs
         for h in traci.vehicle.getIDList():
             V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
-        # eta.FixedUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"], time, 1)
-        eta.LossUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"],Link_list,time, 0.0001,False)
+        eta.FixedUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"], time, 1)
+        # eta.LossUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"],Link_list,time, 0.01,False)
         Csvoutput(csvWriter,time, Link_list, Car_list, communication_range,eta)
-        if (time == 4200):
+        if (time == 1000):
             eta.csvoutput(etawriter)
-        if (time == 4250):
+        if (time == 4500):
             sys.exit()
     sys.stdout.flush()
     traci.close()
@@ -593,9 +594,9 @@ if __name__ == "__main__":
 
     net = 'exam1no.net.xml'
     communication_range = 50
-    f = open('infoResult20190712_range50_0.0001_2.csv',"w")
+    f = open('infoResult20190721_range50_noeta.csv',"w")
     csvWriter = csv.writer(f)
-    ff = open('eta20190712_range50_0.0001_2.csv',"w")
+    ff = open('eta20190721_range50_0.01_noeta.csv',"w")
     etawriter = csv.writer(ff)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
