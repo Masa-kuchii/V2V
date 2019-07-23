@@ -39,6 +39,8 @@ class Car_Info:
         self.n = {}
         self.St = {}
         self.Ut = {}
+        self.Stvalue = {} # linkid:(time,StValue)
+        self.Utvalue = {} # linkid:(time,UtValue)
         self.CVlabel = CV_bool
 
 class Link_Info:
@@ -66,6 +68,9 @@ class Node_Info:
         self.tempcomgroup = []
         self.linkSt = {}
         self.linkUt = {}
+        self.linkStSlope = {}
+        self.linkUtSlope = {}
+        self.past = {}
     def groupClear(self):
         self.tempcomgroup = []
     def GetPosition(self):
@@ -309,7 +314,6 @@ class Eta:
 
 
 """V2V update: V2V communication among drivers in the same link."""
-# getDistance2D(self, x1, y1, x2, y2, isGeo=False, isDriving=False)
 def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time, eta):
     tempcar = car_list[carid]
     tempcarPos = traci.vehicle.getPosition(carid)
@@ -355,12 +359,6 @@ def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time, eta
 
 
 """Information update when CVs exit the link"""
-# edgeID:
-# edge position: traci.vehicle.getLanePosition(leadvehid)
-# h(t) = h(s) / vehicle speed. (timeheadway =spaceheadway/speed)
-# flow = 1/timeheadway
-# qin = maximam incoming flow = minimum gap it is fixed value
-# 1.5m/s
 def ExitUpdate(linklist, car_list, linkid, time, outputcarid, comrange, eta):
     if ((outputcarid != 0) and (traci.edge.getLastStepVehicleNumber(linkid) > 3) and outputcarid in traci.vehicle.getIDList()):
         n = GetQueueLengthCV(outputcarid, car_list, linkid, comrange)
@@ -476,52 +474,64 @@ def NodeEstimation(Nodelist,VechilesOnNetwork,comrange,eta,carlist,linklist, tim
     # Calculate upper and lower bounds at each node
     for linkid in linklist:
         for nodeid2, nodeclass2 in Nodelist.items():
+            passlabel = 0
             St = 0.0
             Ut = 100000
             nodeVehGroup = nodeclass2.GetGroup()
             if (len(nodeVehGroup) != 0):
                 for car in nodeclass2.GetGroup():
                     if (linkid in car.n.keys()):
-                        ture_st_slope = 100
-                        ture_ut_slope = 100
-                        for n in car.n[linkid]:
-                            Car_n_Time = n[0]
-                            Car_n_Value = n[1]
-                            CarDic[Car_n_Time] = Car_n_Value
-                        for st in car.St[linkid]:
-                            Car_st_Time = st[0]
-                            Car_st_Value = st[1]
-                            if (ture_st_slope == 100):
-                                ture_st_slope = Car_st_Value
-                            sum_st_slope = 0
-                            for tichan in range(Car_st_Time,time,1):
-                                sum_st_slope += eta.dic[tichan]*Car_st_Value*1.0
-                            newst = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*eta.value
-                            if (newst > St):
-                                St = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*eta.value
-                                ture_st_slope = Car_st_Value
-                                ture_st_n = CarDic[Car_st_Time]
-                        for ut in car.Ut[linkid]:
-                            Car_ut_Time = ut[0]
-                            Car_ut_Value = ut[1]
-                            if (ture_ut_slope == 100):
-                                ture_ut_slope = Car_ut_Value
-                            sum_ut_slope = 0
-                            for tichan in range(Car_ut_Time,time,1):
-                                sum_ut_slope += eta.dic[tichan]*Car_ut_Value*1.0
-                            newut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*eta.value
-                            if (newut < Ut):
-                                Ut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*eta.value
-                                ture_ut_slope = Car_ut_Value
-                                ture_ut_n = CarDic[Car_ut_Time]
+                        if (len(car.n[linkid])>=1):
+                            CarDic ={}
+                            passlabel = 1
+                            ture_st_slope = 100
+                            ture_ut_slope = 100
+                            for n in car.n[linkid]:
+                                Car_n_Time = n[0]
+                                Car_n_Value = n[1]
+                                CarDic[Car_n_Time] = Car_n_Value
+                            for st in car.St[linkid]:
+                                Car_st_Time = st[0]
+                                Car_st_Value = st[1]
+                                if (ture_st_slope == 100):
+                                    ture_st_slope = Car_st_Value
+                                    nodeclass2.linkStSlope[linkid] = Car_st_Value
+                                sum_st_slope = 0
+                                for tichan in range(Car_st_Time,time,1):
+                                    sum_st_slope += eta.dic[tichan]*Car_st_Value*1.0
+                                newst = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*eta.value
+                                if (newst > St):
+                                    St = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*eta.value
+                                    ture_st_slope = Car_st_Value
+                                    nodeclass2.linkStSlope[linkid] = Car_st_Value
+                                    ture_st_n = CarDic[Car_st_Time]
+                            for ut in car.Ut[linkid]:
+                                Car_ut_Time = ut[0]
+                                Car_ut_Value = ut[1]
+                                if (ture_ut_slope == 100):
+                                    ture_ut_slope = Car_ut_Value
+                                    nodeclass2.linkUtSlope[linkid] = Car_ut_Value
+                                sum_ut_slope = 0
+                                for tichan in range(Car_ut_Time,time,1):
+                                    sum_ut_slope += eta.dic[tichan]*Car_ut_Value*1.0
+                                newut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*eta.value
+                                if (newut < Ut):
+                                    Ut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*eta.value
+                                    ture_ut_slope = Car_ut_Value
+                                    nodeclass2.linkUtSlope[linkid] = Car_ut_Value
+                                    ture_ut_n = CarDic[Car_ut_Time]
             # Input values node variables.
-            nodeclass2.linkSt[linkid] = St
-            if (Ut == 100000):
-                nodeclass2.linkUt[linkid] = 0
+            if (passlabel == 0):
+                if (linkid in nodeclass2.past.keys()):
+                    nodeclass2.linkSt[linkid] = eta.value * nodeclass2.linkStSlope[linkid]
+                    nodeclass2.linkUt[linkid] = eta.value * nodeclass2.linkUtSlope[linkid]
+                else:
+                    nodeclass2.linkSt[linkid] = 0
+                    nodeclass2.linkUt[linkid] = 0
             else:
+                nodeclass2.linkSt[linkid] = St
                 nodeclass2.linkUt[linkid] = Ut
-            nodeclass2.groupClear()
-
+                nodeclass2.past[linkid] = 1
 
 
 # Time n outflow inflow ,edgeforwardcarst edgeforwardcarut edgebackwardcarst edgebackwardcarut edgeTraveltime edgeaverageflow,
@@ -694,7 +704,7 @@ def run():
         # eta.FixedUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"], time, 1)
         # eta.LossUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"],Link_list,time, 0.01,False)
         # Update Node
-        NodeEstimation(Node_list,traci.vehicle.getIDList(),communication_range,eta,Car_list,Link_list, time)
+        NodeEstimation(Node_list,traci.vehicle.getIDList(),communication_range,eta,Car_list,["BtoA"], time)
         # Output to CSV
         Csvoutput(csvWriter,time, Link_list, Car_list, communication_range,eta)
         if (time == 4000):
