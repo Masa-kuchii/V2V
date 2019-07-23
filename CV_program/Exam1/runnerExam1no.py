@@ -10,7 +10,7 @@ import optparse
 import subprocess
 import random
 import csv
-
+from numpy.random import *
 
 # the directory where this script resides
 THISDIR = os.path.dirname(__file__)
@@ -33,12 +33,13 @@ except ImportError:
         "please declare environment variable 'SUMO_HOME' as the root directory of your sumo installation (it should contain folders 'bin', 'tools' and 'docs')")
 
 class Car_Info:
-    def __init__(self,id):
+    def __init__(self,id,CV_bool):
         self.id = id
         self.lasttime = 0
         self.n = {}
         self.St = {}
         self.Ut = {}
+        self.CVlabel = CV_bool
 
 class Link_Info:
     def __init__(self,id):
@@ -51,12 +52,28 @@ class Link_Info:
         self.outflowhead = 0
         self.innum = []
         self.incount = 0
-        self.lastvehs = [0]
+        self.lastvehs = []
         self.queue = 0
         self.Loss = 0
         self.Losshis = {0:0}
     def GetLinkcapacity(self):
         return self.inflow
+
+class Node_Info:
+    def __init__(self, id):
+        self.id = id
+        self.position = traci.junction.getPosition(id)
+        self.tempcomgroup = []
+        self.linkSt = {}
+        self.linkUt = {}
+    def groupClear(self):
+        self.tempcomgroup = []
+    def GetPosition(self):
+        return self.position
+    def PutCarIntoGroup(self, carclass):
+        self.tempcomgroup.append(carclass)
+    def GetGroup(self):
+        return self.tempcomgroup
 
 class Eta:
     def __init__(self):
@@ -110,7 +127,7 @@ class Eta:
                             InconPattern.append(Utpattern)
                     else:
                         num_con += 1
-        return num_incon
+        return num_incon # does not use currently
     def FixedUpdate(self, carids, carlist, QueueLinkIDs, time, time_interval):
         num_incon = self.CountInconsis(carids, carlist, QueueLinkIDs,time)
         current_eta = self.GetEta()
@@ -121,7 +138,7 @@ class Eta:
         self.value = next_eta
         self.hist.append((time, next_eta))
         self.dic[time] = next_eta
-        return 0
+        return 0 # does not use currently
     def Lossgradient(self, carids, carlist, QueueLinkIDs,linklist,time,whichLoss = True):
         h = 1e-4
         Loss = 0
@@ -135,50 +152,51 @@ class Eta:
                 St = 0.0
                 Ut = 100000
                 CarDic ={}
-                if (linkid in car.n.keys()):
-                    if (len(car.n[linkid])>=1):
-                        ture_st_slope = 100
-                        ture_ut_slope = 100
-                        for n in car.n[linkid]:
-                            Car_n_Time = n[0]
-                            Car_n_Value = n[1]
-                            CarDic[Car_n_Time] = Car_n_Value
-                        for st in car.St[linkid]:
-                            Car_st_Time = st[0]
-                            Car_st_Value = st[1]
-                            if (ture_st_slope == 100):
-                                ture_st_slope = Car_st_Value
-                            sum_st_slope = 0
-                            for tichan in range(Car_st_Time,time,1):
-                                sum_st_slope += self.dic[tichan]*Car_st_Value*1.0
-                            newst = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*self.value
-                            if (newst > St):
-                                St = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*self.value
-                                ture_st_slope = Car_st_Value
-                                ture_st_n = CarDic[Car_st_Time]
-                        for ut in car.Ut[linkid]:
-                            Car_ut_Time = ut[0]
-                            Car_ut_Value = ut[1]
-                            if (ture_ut_slope == 100):
-                                ture_ut_slope = Car_ut_Value
-                            sum_ut_slope = 0
-                            for tichan in range(Car_ut_Time,time,1):
-                                sum_ut_slope += self.dic[tichan]*Car_ut_Value*1.0
-                            newut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*self.value
-                            if (newut < Ut):
-                                Ut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*self.value
-                                ture_ut_slope = Car_ut_Value
-                                ture_ut_n = CarDic[Car_ut_Time]
-                        # Calculate using simple Loss LossFunction (kuchii's definition)
-                        if (whichLoss == True):
-                            Loss += self.LossFunction(self.value, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
-                            Lossalphatasu += self.LossFunction(self.value+h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
-                            Lossalphahiku += self.LossFunction(self.value-h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
-                        # Calculate Loss function Gunnar's definition
-                        elif (whichLoss == False):
-                            Loss += self.SimpleLossFunction(self.value, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
-                            Lossalphatasu += self.SimpleLossFunction(self.value+h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
-                            Lossalphahiku += self.SimpleLossFunction(self.value-h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                if (car.CVlabel == 1):
+                    if (linkid in car.n.keys()):
+                        if (len(car.n[linkid])>=1):
+                            ture_st_slope = 100
+                            ture_ut_slope = 100
+                            for n in car.n[linkid]:
+                                Car_n_Time = n[0]
+                                Car_n_Value = n[1]
+                                CarDic[Car_n_Time] = Car_n_Value
+                            for st in car.St[linkid]:
+                                Car_st_Time = st[0]
+                                Car_st_Value = st[1]
+                                if (ture_st_slope == 100):
+                                    ture_st_slope = Car_st_Value
+                                sum_st_slope = 0
+                                for tichan in range(Car_st_Time,time,1):
+                                    sum_st_slope += self.dic[tichan]*Car_st_Value*1.0
+                                newst = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*self.value
+                                if (newst > St):
+                                    St = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*self.value
+                                    ture_st_slope = Car_st_Value
+                                    ture_st_n = CarDic[Car_st_Time]
+                            for ut in car.Ut[linkid]:
+                                Car_ut_Time = ut[0]
+                                Car_ut_Value = ut[1]
+                                if (ture_ut_slope == 100):
+                                    ture_ut_slope = Car_ut_Value
+                                sum_ut_slope = 0
+                                for tichan in range(Car_ut_Time,time,1):
+                                    sum_ut_slope += self.dic[tichan]*Car_ut_Value*1.0
+                                newut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*self.value
+                                if (newut < Ut):
+                                    Ut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*self.value
+                                    ture_ut_slope = Car_ut_Value
+                                    ture_ut_n = CarDic[Car_ut_Time]
+                            # Calculate using simple Loss LossFunction (kuchii's definition)
+                            if (whichLoss == True):
+                                Loss += self.LossFunction(self.value, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                                Lossalphatasu += self.LossFunction(self.value+h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                                Lossalphahiku += self.LossFunction(self.value-h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                            # Calculate Loss function Gunnar's definition
+                            elif (whichLoss == False):
+                                Loss += self.SimpleLossFunction(self.value, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                                Lossalphatasu += self.SimpleLossFunction(self.value+h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
+                                Lossalphahiku += self.SimpleLossFunction(self.value-h, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
         self.Lossdic.append((time,Loss))
         gradient = (Lossalphatasu - Lossalphahiku)/2/h
         self.Lossnumegrad.append((time,gradient))
@@ -269,6 +287,8 @@ class Eta:
     def Oneupdate(self, time):
         current_eta = self.GetEta()
         self.hist.append((time,current_eta))
+        self.Lossdic.append((time,0))
+        self.Lossnumegrad.append((time,0))
         self.dic[time+1] = current_eta
         return 0
     def csvoutput(self, writer):
@@ -296,10 +316,12 @@ def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time, eta
     temp_group = []
     temp_group.append(tempcar)
     for i in netcars:
-        ipos = traci.vehicle.getPosition(i)
-        Distance = traci.simulation.getDistance2D(tempcarPos[0], tempcarPos[1], ipos[0], ipos[1], 0, 0)
-        if ((Distance > 0) and (Distance <= comrange)):
-            temp_group.append(car_list[i])
+        icarclass = car_list[i]
+        if (icarclass.CVlabel == 1):
+            ipos = traci.vehicle.getPosition(i)
+            Distance = traci.simulation.getDistance2D(tempcarPos[0], tempcarPos[1], ipos[0], ipos[1], 0, 0)
+            if ((Distance > 0) and (Distance <= comrange)):
+                temp_group.append(car_list[i])
     if (len(temp_group) >= 2):
         for j in linkidlist:
             n = []
@@ -310,7 +332,7 @@ def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time, eta
                 if j in k.n.keys():
                     if (link_vehs != []):
                         if ( k.id == link_vehs[-1] and traci.vehicle.getSpeed(k.id) <= 1.0 and time >= 500):
-                            n.append((time, GetQueueLength(k.id, car_list, j, comrange)))
+                            n.append((time, GetQueueLengthCV(k.id, car_list, j, comrange)))
                             st.append((time, -(linklist[j].outflow)))
                             ut.append((time, (linklist[j].inflow - linklist[j].outflow)))
                     n = n + k.n[j]
@@ -341,15 +363,8 @@ def V2Vupdate(carid, comrange, car_list, netcars, linklist, linkidlist,time, eta
 # 1.5m/s
 def ExitUpdate(linklist, car_list, linkid, time, outputcarid, comrange, eta):
     if ((outputcarid != 0) and (traci.edge.getLastStepVehicleNumber(linkid) > 3) and outputcarid in traci.vehicle.getIDList()):
-        n = GetQueueLength(outputcarid, car_list, linkid, comrange)
+        n = GetQueueLengthCV(outputcarid, car_list, linkid, comrange)
         if (n > 0):
-            # leadvehid = vehIDs[-1]
-            # lastvehid = vehIDs[0]
-            # lastvehspeed =  traci.vehicle.getSpeed(lastvehid) #[m/s]
-            # lead2Vehspeed = traci.vehicle.getSpeed(lead2Vehid)
-            # InDistanceheadwayMin = traci.vehicle.getMinGap(lastvehid) #[m]
-            # OutDistanceheadway = traci.vehicle.getDrivingDistance(lead2Vehid, linkid, traci.vehicle.getLanePosition(leadvehid), laneIndex=0) #[m]
-            # OutTimeheadway = traci.vehicle.getTau(lastvehid) #OutDistanceheadway / lead2Vehspeed #[s]
             Outflow = linklist[linkid].outflow #veh/s
             Inflowmax = 0.55 #veh/s here, GetlinkCapacity
             tempCar = car_list[outputcarid]
@@ -363,8 +378,44 @@ def ExitUpdate(linklist, car_list, linkid, time, outputcarid, comrange, eta):
             tempCar.lasttime = time
     return 0
 
+def GetQueueLengthCV(carid, car_list, linkid, comrange):
+    car = car_list[carid]
+    carPos = traci.vehicle.getPosition(carid)
+    vehIDs = traci.edge.getLastStepVehicleIDs(linkid)
+    vehIDs_reverse = []
+    for i in vehIDs:
+        CVcarornot = car_list[i]
+        if (CVcarornot.CVlabel == 1):
+            vehIDs_reverse.append(i)
+    vehIDs_reverse.reverse()
+    queue = 0
+    platoon = []
+    for i in range(len(vehIDs_reverse)):
+        mae = vehIDs_reverse[i]
+        mae_posi = traci.vehicle.getPosition(mae)
+        if (traci.simulation.getDistance2D(carPos[0], carPos[1], mae_posi[0], mae_posi[1], 0, 0) > comrange or mae == vehIDs_reverse[-1]):
+            break
+        ushiro = vehIDs_reverse[i+1]
+        ushiro_posi = traci.vehicle.getPosition(ushiro)
+        if (i == 0 and traci.simulation.getDistance2D(carPos[0], carPos[1], ushiro_posi[0], ushiro_posi[1], 0, 0) > comrange):
+            if (traci.vehicle.getSpeed(mae) <= 5.0):
+                queue = 1
+                break
+            else:
+                break
+        two_veh_dis = traci.simulation.getDistance2D(mae_posi[0], mae_posi[1], ushiro_posi[0], ushiro_posi[1], 0, 0)
+        if (two_veh_dis <= 15):
+            if (mae not in platoon):
+                platoon.append(mae)
+            if (ushiro not in platoon):
+                platoon.append(ushiro)
+    if (platoon != []):
+        for j in platoon:
+            if (traci.vehicle.getSpeed(j) <= 5.0):
+                queue += 1
+    return queue
 
-def GetQueueLength(carid, car_list, linkid, comrange):
+def GetQueueLengthTrue(carid, car_list, linkid, comrange):
     car = car_list[carid]
     carPos = traci.vehicle.getPosition(carid)
     vehIDs = traci.edge.getLastStepVehicleIDs(linkid)
@@ -411,6 +462,68 @@ def GetEdgeCapacity(linkid):
 def CsvVehicleOutput():
     return 0
 
+def NodeEstimation(Nodelist,VechilesOnNetwork,comrange,eta,carlist,linklist, time):
+    # add CVs within each node communication range
+    for carid in VechilesOnNetwork:
+        car = carlist[carid]
+        if (car.CVlabel == 1):
+            carposition = traci.vehicle.getPosition(carid)
+            for nodeid, nodeclass in Nodelist.items():
+                nodeposition = nodeclass.GetPosition()
+                two_distance = traci.simulation.getDistance2D(carposition[0], carposition[1], nodeposition[0], nodeposition[1], 0, 0)
+                if (two_distance <= comrange):
+                    nodeclass.PutCarIntoGroup(car)
+    # Calculate upper and lower bounds at each node
+    for linkid in linklist:
+        for nodeid2, nodeclass2 in Nodelist.items():
+            St = 0.0
+            Ut = 100000
+            nodeVehGroup = nodeclass2.GetGroup()
+            if (len(nodeVehGroup) != 0):
+                for car in nodeclass2.GetGroup():
+                    if (linkid in car.n.keys()):
+                        ture_st_slope = 100
+                        ture_ut_slope = 100
+                        for n in car.n[linkid]:
+                            Car_n_Time = n[0]
+                            Car_n_Value = n[1]
+                            CarDic[Car_n_Time] = Car_n_Value
+                        for st in car.St[linkid]:
+                            Car_st_Time = st[0]
+                            Car_st_Value = st[1]
+                            if (ture_st_slope == 100):
+                                ture_st_slope = Car_st_Value
+                            sum_st_slope = 0
+                            for tichan in range(Car_st_Time,time,1):
+                                sum_st_slope += eta.dic[tichan]*Car_st_Value*1.0
+                            newst = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*eta.value
+                            if (newst > St):
+                                St = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*eta.value
+                                ture_st_slope = Car_st_Value
+                                ture_st_n = CarDic[Car_st_Time]
+                        for ut in car.Ut[linkid]:
+                            Car_ut_Time = ut[0]
+                            Car_ut_Value = ut[1]
+                            if (ture_ut_slope == 100):
+                                ture_ut_slope = Car_ut_Value
+                            sum_ut_slope = 0
+                            for tichan in range(Car_ut_Time,time,1):
+                                sum_ut_slope += eta.dic[tichan]*Car_ut_Value*1.0
+                            newut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*eta.value
+                            if (newut < Ut):
+                                Ut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*eta.value
+                                ture_ut_slope = Car_ut_Value
+                                ture_ut_n = CarDic[Car_ut_Time]
+            # Input values node variables.
+            nodeclass2.linkSt[linkid] = St
+            if (Ut == 100000):
+                nodeclass2.linkUt[linkid] = 0
+            else:
+                nodeclass2.linkUt[linkid] = Ut
+            nodeclass2.groupClear()
+
+
+
 # Time n outflow inflow ,edgeforwardcarst edgeforwardcarut edgebackwardcarst edgebackwardcarut edgeTraveltime edgeaverageflow,
 def Csvoutput(writer,time, linklist, car_list,comrange,eta):
     onlyidlist = ["AtoB","BtoA","AtoC","BtoC","CtoCright"]
@@ -423,7 +536,7 @@ def Csvoutput(writer,time, linklist, car_list,comrange,eta):
         vehicles = traci.edge.getLastStepVehicleIDs("BtoA")
         n = 0
         if (len(vehicles) != 0):
-            n = GetQueueLength(vehicles[-1], car_list, "BtoA", comrange)
+            n = GetQueueLengthCV(vehicles[-1], car_list, "BtoA", comrange)
         # n = linklist["BtoA"].queue
         # if (traci.edge.getLastStepHaltingNumber("BtoA") >= 0):
         #     for i in vehicles:
@@ -530,6 +643,11 @@ def run():
     QueueLinkIDs = []
     for i in Link_id_list:
         Link_list[i] = Link_Info(i)
+    # Node_list
+    Node_id_list = traci.junction.getIDList()
+    Node_list = {}
+    for j in Node_id_list:
+        Node_list[j] = Node_Info(j)
     # Car_list
     Car_list = {}
     # eta
@@ -541,13 +659,19 @@ def run():
         time = traci.simulation.getCurrentTime()/1000
         for carid in traci.vehicle.getIDList():
             if carid not in Car_list.keys():
-                Car_list[carid] = Car_Info(carid)
+                random_probability = rand()
+                if (random_probability <= penetration_rate): # add label:1 to CV vehicles
+                    Car_list[carid] = Car_Info(carid,1)
+                elif (random_probability > penetration_rate): # add label:0 to non-CV vehicles
+                    Car_list[carid] = Car_Info(carid, 0)
         # link inflow and outflow Update
         for j in traci.edge.getIDList():
             CurrentVehs = traci.edge.getLastStepVehicleIDs(j)
             temp_link = Link_list[j]
-            if (len(CurrentVehs) != 0):
-                temp_link.queue = GetQueueLength(CurrentVehs[-1], Car_list, "BtoA", communication_range)
+            if ((len(CurrentVehs) != 0)):
+                if ((len(temp_link.lastvehs) == 0)):
+                    temp_link.lastvehs = CurrentVehs
+                temp_link.queue = GetQueueLengthTrue(CurrentVehs[-1], Car_list, "BtoA", communication_range)
                 if (CurrentVehs[-1] != temp_link.lastvehs[-1]):
                     temp_link.outcount += 1
                     temp_out = (traci.simulation.getCurrentTime()/1000,temp_link.outcount)
@@ -556,15 +680,24 @@ def run():
                     # temp_link.outflowhead = 1.0 / headway
                     temp_link.outnum.append(temp_out)
                     outputCar = temp_link.lastvehs[-1]
+                    outputCarclass = Car_list[outputCar]
                     temp_link.lasttime = traci.simulation.getCurrentTime()/1000
-                    ExitUpdate(Link_list, Car_list,j,time,outputCar,communication_range,eta)
+                    if (outputCarclass.CVlabel == 1):
+                        ExitUpdate(Link_list, Car_list,j,time,outputCar,communication_range,eta)
                     temp_link.lastvehs = CurrentVehs
         for h in traci.vehicle.getIDList():
-            V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
-        eta.FixedUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"], time, 1)
+            v2vcarclass = Car_list[h]
+            if (v2vcarclass.CVlabel == 1):
+                V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
+        # Update Eta
+        eta.Oneupdate(time)
+        # eta.FixedUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"], time, 1)
         # eta.LossUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"],Link_list,time, 0.01,False)
+        # Update Node
+        NodeEstimation(Node_list,traci.vehicle.getIDList(),communication_range,eta,Car_list,Link_list, time)
+        # Output to CSV
         Csvoutput(csvWriter,time, Link_list, Car_list, communication_range,eta)
-        if (time == 1000):
+        if (time == 4000):
             eta.csvoutput(etawriter)
         if (time == 4500):
             sys.exit()
@@ -584,7 +717,7 @@ def get_options():
 if __name__ == "__main__":
     # load whether to run with or without GUI
     options = get_options()
-
+    seed(100)
     # this script has been called from the command line. It will start sumo as a
     # server, then connect and run
     if options.nogui:
@@ -593,10 +726,11 @@ if __name__ == "__main__":
         sumoBinary = checkBinary('sumo-gui')
 
     net = 'exam1no.net.xml'
-    communication_range = 50
-    f = open('infoResult20190721_range50_noeta.csv',"w")
+    communication_range = 100
+    penetration_rate = 1.0
+    f = open('infoResult20190722_range100_nodetest.csv',"w")
     csvWriter = csv.writer(f)
-    ff = open('eta20190721_range50_0.01_noeta.csv',"w")
+    ff = open('eta20190722_range100_noeta_nodetest.csv',"w")
     etawriter = csv.writer(ff)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
