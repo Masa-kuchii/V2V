@@ -44,6 +44,15 @@ class Car_Info:
         self.StslopeValue = {}
         self.UtslopeValue = {}
         self.CVlabel = CV_bool
+        self.LinkExperi = {}
+    def GetStUtValue(self,linkid):
+        st = self.Stvalue[linkid]
+        ut = self.Utvalue[linkid]
+        return (st, ut)
+    def GetStUtSlope(self,linkid):
+        stslope = self.StslopeValue[linkid]
+        utslope = self.UtslopeValue[linkid]
+        return (stslope, utslope)
 
 class Link_Info:
     def __init__(self,id):
@@ -476,64 +485,38 @@ def NodeEstimation(Nodelist,VechilesOnNetwork,comrange,eta,carlist,linkidlist, t
     # Calculate upper and lower bounds at each node
     for linkid in linkidlist:
         for nodeid2, nodeclass2 in Nodelist.items():
-            passlabel = 0
-            St = 0.0
-            Ut = 100000
+            St = []
+            Ut = []
+            StSlope = {}
+            UtSlope = {}
             nodeVehGroup = nodeclass2.GetGroup()
             if (len(nodeVehGroup) != 0):
                 for car in nodeclass2.GetGroup():
-                    if (linkid in car.n.keys()):
-                        if (len(car.n[linkid])>=1):
-                            CarDic ={}
-                            passlabel = 1
-                            ture_st_slope = 100
-                            ture_ut_slope = 100
-                            for n in car.n[linkid]:
-                                Car_n_Time = n[0]
-                                Car_n_Value = n[1]
-                                CarDic[Car_n_Time] = Car_n_Value
-                            for st in car.St[linkid]:
-                                Car_st_Time = st[0]
-                                Car_st_Value = st[1]
-                                if (ture_st_slope == 100):
-                                    ture_st_slope = Car_st_Value
-                                    nodeclass2.linkStSlope[linkid] = Car_st_Value
-                                sum_st_slope = 0
-                                for tichan in range(Car_st_Time,time,1):
-                                    sum_st_slope += eta.dic[tichan]*Car_st_Value*1.0
-                                newst = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*eta.value
-                                if (newst > St):
-                                    St = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*eta.value
-                                    ture_st_slope = Car_st_Value
-                                    nodeclass2.linkStSlope[linkid] = Car_st_Value
-                                    ture_st_n = CarDic[Car_st_Time]
-                            for ut in car.Ut[linkid]:
-                                Car_ut_Time = ut[0]
-                                Car_ut_Value = ut[1]
-                                if (ture_ut_slope == 100):
-                                    ture_ut_slope = Car_ut_Value
-                                    nodeclass2.linkUtSlope[linkid] = Car_ut_Value
-                                sum_ut_slope = 0
-                                for tichan in range(Car_ut_Time,time,1):
-                                    sum_ut_slope += eta.dic[tichan]*Car_ut_Value*1.0
-                                newut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*eta.value
-                                if (newut < Ut):
-                                    Ut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*eta.value
-                                    ture_ut_slope = Car_ut_Value
-                                    nodeclass2.linkUtSlope[linkid] = Car_ut_Value
-                                    ture_ut_n = CarDic[Car_ut_Time]
-            # Input values node variables.
-            if (passlabel == 0):
+                    if (car.LinkExperi[linkid] == 1):
+                        StAndUt = car.GetStUtValue(linkid)
+                        carst = StAndUt[0]
+                        carut = StAndUt[1]
+                        St.append(carst)
+                        Ut.append(carut)
+                        StAndUtSlope = car.GetStUtSlope(linkid)
+                        carstslope = StAndUtSlope[0]
+                        carutslope = StAndUtSlope[1]
+                        StSlope[carst] = carstslope
+                        UtSlope[carut] = carutslope
+                        DecidedSt = max(St)
+                        DecidedUt = min(Ut)
+                        nodeclass2.linkSt[linkid] = DecidedSt
+                        nodeclass2.linkUt[linkid] = DecidedUt
+                        nodeclass2.linkStSlope[linkid] = StSlope[DecidedSt]
+                        nodeclass2.linkUtSlope[linkid] = UtSlope[DecidedUt]
+                        nodeclass2.past[linkid] = 1
+            else:
                 if (linkid in nodeclass2.past.keys()):
                     nodeclass2.linkSt[linkid] = eta.value * nodeclass2.linkStSlope[linkid]
                     nodeclass2.linkUt[linkid] = eta.value * nodeclass2.linkUtSlope[linkid]
                 else:
                     nodeclass2.linkSt[linkid] = 0
                     nodeclass2.linkUt[linkid] = 0
-            else:
-                nodeclass2.linkSt[linkid] = St
-                nodeclass2.linkUt[linkid] = Ut
-                nodeclass2.past[linkid] = 1
 
 def VehicleStUtCalculation(CarsOnNetwork,time,linkidlist,eta, carlist):
     for linkid in linkidlist:
@@ -581,17 +564,21 @@ def VehicleStUtCalculation(CarsOnNetwork,time,linkidlist,eta, carlist):
                         car.Utvalue[linkid] = Ut
                         car.StslopeValue[linkid] = ture_st_slope
                         car.UtslopeValue[linkid] = ture_ut_slope
+                        car.LinkExperi[linkid] = 1
                     else:
-                        car.Stvalue[linkid] = None
-                        car.Utvalue[linkid] = None
-                        car.StslopeValue[linkid] = None
-                        car.UtslopeValue[linkid] = None
+                        car.Stvalue[linkid] = 0
+                        car.Utvalue[linkid] = 0
+                        car.StslopeValue[linkid] = 0
+                        car.UtslopeValue[linkid] = 0
+                        car.LinkExperi[linkid] = 0
                 else:
-                    car.Stvalue[linkid] = None
-                    car.Utvalue[linkid] = None
-                    car.StslopeValue[linkid] = None
-                    car.UtslopeValue[linkid] = None
-# Time n outflow inflow ,edgeforwardcarst edgeforwardcarut edgebackwardcarst edgebackwardcarut edgeTraveltime edgeaverageflow,
+                    car.Stvalue[linkid] = 0
+                    car.Utvalue[linkid] = 0
+                    car.StslopeValue[linkid] = 0
+                    car.UtslopeValue[linkid] = 0
+                    car.LinkExperi[linkid] = 0
+
+
 def Csvoutput(writer,time, linklist, car_list,comrange,eta):
     onlyidlist = ["AtoB","BtoA","AtoC","BtoC","CtoCright"]
     if (time == 1):
@@ -630,69 +617,19 @@ def Csvoutput(writer,time, linklist, car_list,comrange,eta):
                 leadveh = car_list[leadvehid]
                 LeadNdic = {}
                 laneid = i + "_0"
-                lestvalue = 0
-                leutvalue = 100000
-                if ("BtoA" in leadveh.n.keys()):
-                    for j in leadveh.n["BtoA"]:
-                        leadnT = j[0]
-                        leadnvalue = j[1]
-                        LeadNdic[leadnT] = leadnvalue
-                    for lest in leadveh.St["BtoA"]:
-                        lestt = lest[0]
-                        lestslope = lest[1]
-                        sum_lest_slope = 0
-                        for tichan in range(lestt,time+1,1):
-                            sum_lest_slope += eta.dic[tichan]*lestslope*1.0
-                        newst = LeadNdic[lestt] + sum_lest_slope
-                        if (newst > lestvalue):
-                            lestvalue = LeadNdic[lestt] + sum_lest_slope
-                    for leut in leadveh.Ut["BtoA"]:
-                        leutt = leut[0]
-                        leutslope = leut[1]
-                        sum_leut_slope = 0
-                        for tichan in range(leutt,time+1,1):
-                            sum_leut_slope += eta.dic[tichan]*leutslope*1.0
-                        newut = LeadNdic[leutt] + sum_leut_slope
-                        if (newut < leutvalue):
-                            leutvalue = LeadNdic[leutt] + sum_leut_slope
-                    val.append(lestvalue)
-                    val.append(leutvalue)
-                else:
-                    val.append(0)
-                    val.append(0)
+                lestandut = leadveh.GetStUtValue("BtoA")
+                lestvalue = lestandut[0]
+                leutvalue = lestandut[1]
+                val.append(lestvalue)
+                val.append(leutvalue)
                 lastvehid = vehIDs[0]
                 lastveh = car_list[lastvehid]
                 LastNdic = {}
-                lastvalue = 0
-                lautvalue = 100000
-                if ("BtoA" in lastveh.n.keys()):
-                    for j in lastveh.n["BtoA"]:
-                        lastdnT = j[0]
-                        lastnvalue = j[1]
-                        LastNdic[lastdnT] = lastnvalue
-                    for last in lastveh.St["BtoA"]:
-                        lastt = last[0]
-                        lastslope = last[1]
-                        sum_last_slope = 0
-                        for tichan in range(lastt,time+1,1):
-                            sum_last_slope += eta.dic[tichan]*lastslope*1.0
-                        newlast = LastNdic[lastt] + sum_last_slope
-                        if (newlast > lastvalue):
-                            lastvalue = LastNdic[lastt] + sum_last_slope
-                    for laut in lastveh.Ut["BtoA"]:
-                        lautt = laut[0]
-                        lautslope = laut[1]
-                        sum_laut_slope = 0
-                        for tichan in range(lautt,time+1,1):
-                            sum_laut_slope += eta.dic[tichan]*lautslope*1.0
-                        newlaut = LastNdic[lautt] + sum_laut_slope
-                        if (newlaut < lautvalue):
-                            lautvalue = LastNdic[lautt] + sum_laut_slope
-                    val.append(lastvalue)
-                    val.append(lautvalue)
-                else:
-                    val.append(0)
-                    val.append(0)
+                lastandut = lastveh.GetStUtValue("BtoA")
+                lastvalue = lastandut[0]
+                lautvalue = lastandut[1]
+                val.append(lastvalue)
+                val.append(lautvalue)
                 val.append(traci.edge.getTraveltime(i))
                 flow = traci.edge.getLastStepVehicleNumber(i) / traci.lane.getLength(laneid) * traci.edge.getLastStepMeanSpeed(i)
                 val.append(linklist[i].outflow)
@@ -756,8 +693,7 @@ def run():
             v2vcarclass = Car_list[h]
             if (v2vcarclass.CVlabel == 1):
                 V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
-        # Update St and Ut of all Vehicles
-        VehicleStUtCalculation(traci.vehicle.getIDList(),time,["BtoA"],eta,Car_list)
+        VehicleStUtCalculation(traci.vehicle.getIDList(),time,["BtoA"],eta,Car_list)  # Update St and Ut of all Vehicles
         # Update Eta
         eta.Oneupdate(time)
         # eta.FixedUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"], time, 1)
@@ -797,9 +733,9 @@ if __name__ == "__main__":
     net = 'exam1no.net.xml'
     communication_range = 100
     penetration_rate = 1.0
-    f = open('infoResult20190722_range100_nodetest.csv',"w")
+    f = open('infoResult20190723_range100_StVtcalculation_test.csv',"w")
     csvWriter = csv.writer(f)
-    ff = open('eta20190722_range100_noeta_nodetest.csv',"w")
+    ff = open('eta20190723_range100_StVtcalculation_test.csv',"w")
     etawriter = csv.writer(ff)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
