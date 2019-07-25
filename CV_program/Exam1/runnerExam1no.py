@@ -171,38 +171,12 @@ class Eta:
                 if (car.CVlabel == 1):
                     if (linkid in car.n.keys()):
                         if (len(car.n[linkid])>=1):
-                            ture_st_slope = 100
-                            ture_ut_slope = 100
-                            for n in car.n[linkid]:
-                                Car_n_Time = n[0]
-                                Car_n_Value = n[1]
-                                CarDic[Car_n_Time] = Car_n_Value
-                            for st in car.St[linkid]:
-                                Car_st_Time = st[0]
-                                Car_st_Value = st[1]
-                                if (ture_st_slope == 100):
-                                    ture_st_slope = Car_st_Value
-                                sum_st_slope = 0
-                                for tichan in range(Car_st_Time,time,1):
-                                    sum_st_slope += self.dic[tichan]*Car_st_Value*1.0
-                                newst = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*self.value
-                                if (newst > St):
-                                    St = CarDic[Car_st_Time] + sum_st_slope + Car_st_Value*self.value
-                                    ture_st_slope = Car_st_Value
-                                    ture_st_n = CarDic[Car_st_Time]
-                            for ut in car.Ut[linkid]:
-                                Car_ut_Time = ut[0]
-                                Car_ut_Value = ut[1]
-                                if (ture_ut_slope == 100):
-                                    ture_ut_slope = Car_ut_Value
-                                sum_ut_slope = 0
-                                for tichan in range(Car_ut_Time,time,1):
-                                    sum_ut_slope += self.dic[tichan]*Car_ut_Value*1.0
-                                newut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*self.value
-                                if (newut < Ut):
-                                    Ut = CarDic[Car_ut_Time] + sum_ut_slope + Car_ut_Value*self.value
-                                    ture_ut_slope = Car_ut_Value
-                                    ture_ut_n = CarDic[Car_ut_Time]
+                            StAndUtValue = car.GetStUtValue(linkid)
+                            StAndUtSlope = car.GetStUtSlope(linkid)
+                            St = StAndUtValue[0]
+                            Ut = StAndUtValue[1]
+                            ture_st_slope = StAndUtSlope[0]
+                            ture_ut_slope = StAndUtSlope[1]
                             # Calculate using simple Loss LossFunction (kuchii's definition)
                             if (whichLoss == True):
                                 Loss += self.LossFunction(self.value, St, ture_st_slope,Ut,ture_ut_slope,link_temp.queue)
@@ -227,7 +201,7 @@ class Eta:
         newst = oldst - self.value*stslope*1.0 + neweta*stslope*1.0
         newut = oldut - self.value*utslope*1.0 + neweta*utslope*1.0
         numerator = (ntrue-(newst+newut)/2)
-        denominator = max((newut-newst), 4.0)
+        denominator = max((newut-newst), 2.0)
         U = numerator*numerator/denominator/denominator/2
         return  (U)
     def LossFunction_directGrad(self, carids, carlist, QueueLinkIDs,linklist,time):
@@ -637,6 +611,19 @@ def Csvoutput(writer,time, linklist, car_list,comrange,eta):
         writer.writerow(val)
     return 0
 
+def Nodeoutput(writer, Nodeidlist, Nodelist, time):
+    if (time == 1):
+        header = ["time"]
+        for nodeid in Nodeidlist:
+            header.append(nodeid)
+        writer.writerow(header)
+    else:
+        row = []
+        row.append(time)
+        for index in range(len(header)-1):
+            a = 1
+
+
 
 
 def run():
@@ -695,16 +682,18 @@ def run():
                 V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
         VehicleStUtCalculation(traci.vehicle.getIDList(),time,["BtoA"],eta,Car_list)  # Update St and Ut of all Vehicles
         # Update Eta
-        eta.Oneupdate(time)
+        # eta.Oneupdate(time)
         # eta.FixedUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"], time, 1)
-        # eta.LossUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"],Link_list,time, 0.01,False)
+        eta.LossUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"],Link_list,time, 0.01,False)
         # Update Node
         # NodeEstimation(Node_list,traci.vehicle.getIDList(),communication_range,eta,Car_list,["BtoA"], time)
-        # Output to CSV
+        for index in Node_id_list:
+            print(index)
+        # Output to CSV and Node
         Csvoutput(csvWriter,time, Link_list, Car_list, communication_range,eta)
-        if (time == 4000):
+        if (time == 7000):
             eta.csvoutput(etawriter)
-        if (time == 4500):
+        if (time == 7200):
             sys.exit()
     sys.stdout.flush()
     traci.close()
@@ -731,12 +720,16 @@ if __name__ == "__main__":
         sumoBinary = checkBinary('sumo-gui')
 
     net = 'exam1no.net.xml'
-    communication_range = 100
+    communication_range = 50
     penetration_rate = 1.0
-    f = open('infoResult20190723_range100_StVtcalculation_test.csv',"w")
+    CVdensi = communication_range*penetration_rate
+    comme = "test"
+    f = open("infoResult20190725_CR" + str(communication_range) + "_MPR" + str(penetration_rate) + "_CVden"+ str(CVdensi) + "_eta0.01" + comme + ".csv","w")
     csvWriter = csv.writer(f)
-    ff = open('eta20190723_range100_StVtcalculation_test.csv',"w")
+    ff = open("eta20190725_CR" + str(communication_range) + "_MPR" + str(penetration_rate) +  "_CVden"+ str(CVdensi) + "_eta0.01" + comme + ".csv","w")
     etawriter = csv.writer(ff)
+    fff = open("Node20190725_CR" + str(communication_range) + "_MPR" + str(penetration_rate) + "_CVden"+ str(CVdensi) + "_eta0.01" + comme + ".csv","w")
+    nodewriter = csv.writer(fff)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
     traci.start([sumoBinary, '-c', 'exam1no.sumocfg', '--queue-output', 'queue.xml'])
