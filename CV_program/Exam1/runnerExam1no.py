@@ -72,6 +72,7 @@ class Link_Info:
     def GetLinkcapacity(self):
         return self.inflow
 
+
 class Node_Info:
     def __init__(self, id):
         self.id = id
@@ -90,6 +91,10 @@ class Node_Info:
         self.tempcomgroup.append(carclass)
     def GetGroup(self):
         return self.tempcomgroup
+    def GetStUtValue(self,linkid):
+        st = self.linkSt[linkid]
+        ut = self.linkUt[linkid]
+        return (st, ut)
 
 class Eta:
     def __init__(self):
@@ -611,20 +616,24 @@ def Csvoutput(writer,time, linklist, car_list,comrange,eta):
         writer.writerow(val)
     return 0
 
-def Nodeoutput(writer, Nodeidlist, Nodelist, time):
+def Nodeoutput(writer, Nodeidlist, Nodelist, time, linkid):
     if (time == 1):
         header = ["time"]
         for nodeid in Nodeidlist:
-            header.append(nodeid)
+            nodeS = nodeid + "_S"
+            nodeU = nodeid + "_U"
+            header.append(nodeS)
+            header.append(nodeU)
         writer.writerow(header)
     else:
         row = []
         row.append(time)
-        for index in range(len(header)-1):
-            a = 1
-
-
-
+        for nodeid in Nodeidlist:
+            nodeclass = Nodelist[nodeid]
+            StAndUt = nodeclass.GetStUtValue(linkid)
+            row.append(StAndUt[0])
+            row.append(StAndUt[1])
+        writer.writerow(row)
 
 def run():
     """execute the TraCI control loop"""
@@ -682,18 +691,19 @@ def run():
                 V2Vupdate(h, communication_range, Car_list, traci.vehicle.getIDList(), Link_list, Link_id_list,time,eta)
         VehicleStUtCalculation(traci.vehicle.getIDList(),time,["BtoA"],eta,Car_list)  # Update St and Ut of all Vehicles
         # Update Eta
-        # eta.Oneupdate(time)
+        eta.Oneupdate(time)
         # eta.FixedUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"], time, 1)
-        eta.LossUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"],Link_list,time, 0.01,False)
+        # eta.LossUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"],Link_list,time, 0.01,False)
         # Update Node
-        # NodeEstimation(Node_list,traci.vehicle.getIDList(),communication_range,eta,Car_list,["BtoA"], time)
+        NodeEstimation(Node_list,traci.vehicle.getIDList(),communication_range,eta,Car_list,["BtoA"], time)
         for index in Node_id_list:
             print(index)
         # Output to CSV and Node
         Csvoutput(csvWriter,time, Link_list, Car_list, communication_range,eta)
-        if (time == 7000):
+        Nodeoutput(nodewriter, Node_id_list, Node_list, time, "BtoA")
+        if (time == 4000):
             eta.csvoutput(etawriter)
-        if (time == 7200):
+        if (time == 4500):
             sys.exit()
     sys.stdout.flush()
     traci.close()
