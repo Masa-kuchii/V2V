@@ -39,8 +39,8 @@ class Car_Info:
         self.n = {}
         self.St = {}
         self.Ut = {}
-        self.Stvalue = {} # linkid:(time,StValue)
-        self.Utvalue = {} # linkid:(time,UtValue)
+        self.Stvalue = {} # linkid:(StValue)
+        self.Utvalue = {} # linkid:(UtValue)
         self.StslopeValue = {}
         self.UtslopeValue = {}
         self.CVlabel = CV_bool
@@ -72,7 +72,6 @@ class Link_Info:
     def GetLinkcapacity(self):
         return self.inflow
 
-
 class Node_Info:
     def __init__(self, id):
         self.id = id
@@ -85,6 +84,7 @@ class Node_Info:
         self.past = {}
     def groupClear(self):
         self.tempcomgroup = []
+        return 0
     def GetPosition(self):
         return self.position
     def PutCarIntoGroup(self, carclass):
@@ -446,9 +446,6 @@ def GetEdgeCapacity(linkid):
     capacity = inflowmaxcurrent*lanenum
     return capacity
 
-# ooutput of vehicle information for debugging.
-def CsvVehicleOutput():
-    return 0
 
 def NodeEstimation(Nodelist,VechilesOnNetwork,comrange,eta,carlist,linkidlist, time):
     # add CVs within each node communication range
@@ -491,11 +488,14 @@ def NodeEstimation(Nodelist,VechilesOnNetwork,comrange,eta,carlist,linkidlist, t
                         nodeclass2.past[linkid] = 1
             else:
                 if (linkid in nodeclass2.past.keys()):
-                    nodeclass2.linkSt[linkid] = eta.value * nodeclass2.linkStSlope[linkid]
-                    nodeclass2.linkUt[linkid] = eta.value * nodeclass2.linkUtSlope[linkid]
+                    prest = nodeclass2.linkSt[linkid]
+                    preut = nodeclass2.linkUt[linkid]
+                    nodeclass2.linkSt[linkid] = prest + eta.value * nodeclass2.linkStSlope[linkid]
+                    nodeclass2.linkUt[linkid] = preut + eta.value * nodeclass2.linkUtSlope[linkid]
                 else:
                     nodeclass2.linkSt[linkid] = 0
                     nodeclass2.linkUt[linkid] = 0
+            nodeclass2.groupClear()
 
 def VehicleStUtCalculation(CarsOnNetwork,time,linkidlist,eta, carlist):
     for linkid in linkidlist:
@@ -570,13 +570,6 @@ def Csvoutput(writer,time, linklist, car_list,comrange,eta):
         n = 0
         if (len(vehicles) != 0):
             n = GetQueueLengthCV(vehicles[-1], car_list, "BtoA", comrange)
-        # n = linklist["BtoA"].queue
-        # if (traci.edge.getLastStepHaltingNumber("BtoA") >= 0):
-        #     for i in vehicles:
-        #         if (traci.vehicle.getSpeed(i) < 5.0):
-        #             n += 1
-        #             # n = len(vehicles) - vehicles.index(i)
-        #             # break
         val.append(n)
         outflowcal = 1.0*1000 * linklist["BtoA"].outcount / traci.simulation.getCurrentTime()
         val.append(outflowcal)
@@ -594,19 +587,25 @@ def Csvoutput(writer,time, linklist, car_list,comrange,eta):
                 vehIDs = traci.edge.getLastStepVehicleIDs(i)
                 leadvehid = vehIDs[-1]
                 leadveh = car_list[leadvehid]
-                LeadNdic = {}
                 laneid = i + "_0"
-                lestandut = leadveh.GetStUtValue("BtoA")
-                lestvalue = lestandut[0]
-                leutvalue = lestandut[1]
+                if (leadveh.CVlabel == 1):
+                    lestandut = leadveh.GetStUtValue("BtoA")
+                    lestvalue = lestandut[0]
+                    leutvalue = lestandut[1]
+                else:
+                    lestvalue = 0
+                    leutvalue = 0
                 val.append(lestvalue)
                 val.append(leutvalue)
                 lastvehid = vehIDs[0]
                 lastveh = car_list[lastvehid]
-                LastNdic = {}
-                lastandut = lastveh.GetStUtValue("BtoA")
-                lastvalue = lastandut[0]
-                lautvalue = lastandut[1]
+                if (lastveh.CVlabel == 1):
+                    lastandut = lastveh.GetStUtValue("BtoA")
+                    lastvalue = lastandut[0]
+                    lautvalue = lastandut[1]
+                else:
+                    lastvalue = 0
+                    lautvalue = 0
                 val.append(lastvalue)
                 val.append(lautvalue)
                 val.append(traci.edge.getTraveltime(i))
@@ -630,9 +629,14 @@ def Nodeoutput(writer, Nodeidlist, Nodelist, time, linkid):
         row.append(time)
         for nodeid in Nodeidlist:
             nodeclass = Nodelist[nodeid]
-            StAndUt = nodeclass.GetStUtValue(linkid)
-            row.append(StAndUt[0])
-            row.append(StAndUt[1])
+            St = 0
+            Ut = 0
+            if ((linkid in nodeclass.linkSt) and (linkid in nodeclass.linkUt)):
+                StAndUt = nodeclass.GetStUtValue(linkid)
+                St = StAndUt[0]
+                Ut = StAndUt[1]
+            row.append(St)
+            row.append(Ut)
         writer.writerow(row)
 
 def run():
@@ -696,8 +700,6 @@ def run():
         # eta.LossUpdate(traci.vehicle.getIDList(), Car_list, ["BtoA"],Link_list,time, 0.01,False)
         # Update Node
         NodeEstimation(Node_list,traci.vehicle.getIDList(),communication_range,eta,Car_list,["BtoA"], time)
-        for index in Node_id_list:
-            print(index)
         # Output to CSV and Node
         Csvoutput(csvWriter,time, Link_list, Car_list, communication_range,eta)
         Nodeoutput(nodewriter, Node_id_list, Node_list, time, "BtoA")
@@ -730,15 +732,15 @@ if __name__ == "__main__":
         sumoBinary = checkBinary('sumo-gui')
 
     net = 'exam1no.net.xml'
-    communication_range = 50
-    penetration_rate = 1.0
+    communication_range = 100
+    penetration_rate = 0.5
     CVdensi = communication_range*penetration_rate
-    comme = "test"
-    f = open("infoResult20190725_CR" + str(communication_range) + "_MPR" + str(penetration_rate) + "_CVden"+ str(CVdensi) + "_eta0.01" + comme + ".csv","w")
+    comme = "maji"
+    f = open("infoResult20190726_CR" + str(communication_range) + "_MPR" + str(penetration_rate) + "_CVden"+ str(CVdensi) + "_eta0.01" + comme + ".csv","w")
     csvWriter = csv.writer(f)
-    ff = open("eta20190725_CR" + str(communication_range) + "_MPR" + str(penetration_rate) +  "_CVden"+ str(CVdensi) + "_eta0.01" + comme + ".csv","w")
+    ff = open("eta20190726_CR" + str(communication_range) + "_MPR" + str(penetration_rate) +  "_CVden"+ str(CVdensi) + "_eta0.01" + comme + ".csv","w")
     etawriter = csv.writer(ff)
-    fff = open("Node20190725_CR" + str(communication_range) + "_MPR" + str(penetration_rate) + "_CVden"+ str(CVdensi) + "_eta0.01" + comme + ".csv","w")
+    fff = open("Node20190726_CR" + str(communication_range) + "_MPR" + str(penetration_rate) + "_CVden"+ str(CVdensi) + "_eta0.01" + comme + ".csv","w")
     nodewriter = csv.writer(fff)
     # this is the normal way of using traci. sumo is started as a
     # subprocess and then the python script connects and runs
